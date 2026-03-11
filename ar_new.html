@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shankh AR Chatbot</title>
+<link rel="icon" href="data:,">
+
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<!-- three.js loaders loaded as ES modules and bridged onto AFRAME.THREE -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+  // Bridge onto window so the main script can access them
+  window._GLTFLoader  = GLTFLoader;
+  window._DRACOLoader = DRACOLoader;
+  window._loadersReady = true;
+  console.log('✅ GLTFLoader + DRACOLoader ready via ES module');
+</script>
+
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+a-scene { position: fixed !important; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+.mindar-ui-overlay, .mindar-ui-loading, .mindar-ui-scanning { display: none !important; }
+
+#status-overlay {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.75); color: #fff;
+  padding: 10px 22px; border-radius: 30px; z-index: 500; font-size: 14px;
+  pointer-events: none; display: flex; align-items: center; gap: 8px;
+  backdrop-filter: blur(6px);
+}
+
+/* Detected-language toast pill */
+#lang-pill {
+  position: fixed; top: 60px; right: 16px;
+  background: rgba(20,180,120,0.92); color: #fff;
+  padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  z-index: 600; pointer-events: none; display: none;
+  align-items: center; gap: 6px; backdrop-filter: blur(6px);
+  transition: opacity 0.3s;
+}
+#lang-pill.visible { display: flex; }
+
+#instructions {
+  position: fixed; inset: 0; background: rgba(10,10,20,0.97);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
+}
+#instructions-card {
+  background: #1a1a2e; color: #eee; padding: 36px 28px; border-radius: 20px;
+  text-align: center; max-width: 340px; width: 90%;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+#instructions-card h2 { margin: 0 0 4px; color: #4fc3f7; font-size: 22px; }
+#instructions-card .subtitle { color: #aaa; font-size: 12px; margin: 0 0 12px; }
+.step {
+  background: rgba(255,255,255,0.06); border-radius: 10px;
+  padding: 10px 14px; margin: 8px 0; font-size: 13px;
+  text-align: left; display: flex; align-items: flex-start; gap: 10px;
+}
+.step-num {
+  background: #667eea; color: #fff; border-radius: 50%;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+#marker-preview {
+  width: 130px; height: 130px; margin: 14px auto;
+  background: #fff; border-radius: 10px; padding: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+#marker-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#start-btn {
+  margin-top: 18px; background: #4fc3f7; font-size: 15px;
+  padding: 12px 32px; width: 100%; border: none; border-radius: 24px;
+  color: #fff; font-weight: 600; cursor: pointer;
+}
+#start-btn:disabled { background: #bbb; }
+#loading-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,10,20,0.85);
+  align-items: center; justify-content: center;
+  z-index: 1500; flex-direction: column; gap: 16px;
+}
+#loading-overlay.active { display: flex; }
+.spinner {
+  width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2);
+  border-top-color: #4fc3f7; border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading-overlay p { color: #fff; font-size: 14px; margin: 0; }
+#retry-btn {
+  margin-top: 12px; padding: 10px 28px; background: #4fc3f7;
+  border: none; border-radius: 24px; color: #fff;
+  font-weight: 600; font-size: 14px; cursor: pointer; display: none;
+}
+
+#chat-overlay {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  width: 92%; max-width: 420px; background: rgba(255,255,255,0.96);
+  border-radius: 20px; padding: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  z-index: 1000; display: none;
+  touch-action: auto; pointer-events: all;
+}
+#chat-overlay.active { display: block; }
+
+/* Language bar */
+#lang-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; padding: 0 2px;
+}
+#lang-bar .lang-label { font-size: 11px; color: #888; font-weight: 600; letter-spacing: 0.5px; }
+#lang-select-wrap { display: flex; align-items: center; gap: 6px; }
+#lang-flag { font-size: 18px; }
+#lang-select {
+  font-size: 12px; border: 1.5px solid #e4e8f0; border-radius: 16px;
+  padding: 4px 10px; background: #f4f6f9; color: #333;
+  outline: none; cursor: pointer; font-weight: 600;
+}
+#tts-engine-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px;
+  background: #e8f5e9; color: #2e7d32; font-weight: 700;
+  border: 1px solid #a5d6a7;
+}
+
+#chat-messages {
+  max-height: 180px; overflow-y: auto; margin-bottom: 10px; padding: 8px;
+  background: #f4f6f9; border-radius: 12px; font-size: 13px;
+}
+.message {
+  margin-bottom: 7px; padding: 7px 12px;
+  border-radius: 14px; line-height: 1.4; word-break: break-word;
+}
+.user-message  { background: #667eea; color: #fff; text-align: right; margin-left: 18%; }
+.bot-message   { background: #e4e8f0; color: #222; margin-right: 18%; }
+.rag-indicator { font-size: 10px; color: #999; text-align: right; margin-top: 2px; }
+#input-container { display: flex; gap: 8px; }
+#user-input {
+  flex: 1; padding: 10px 14px; border: 2px solid #e4e8f0;
+  border-radius: 24px; outline: none; font-size: 16px;
+}
+button {
+  padding: 10px 18px; border: none; border-radius: 24px;
+  background: #667eea; color: #fff; font-weight: 600;
+  cursor: pointer; font-size: 13px;
+}
+button:disabled { background: #bbb; cursor: not-allowed; }
+#voice-btn { background: #28a745; min-width: 44px; padding: 10px; }
+#voice-btn.listening { background: #dc3545; animation: pulse 0.9s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+#audio-banner {
+  display: none; position: fixed; bottom: 220px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,140,0,0.95); color: #fff;
+  padding: 12px 24px; border-radius: 24px; font-size: 14px; font-weight: 600;
+  z-index: 1100; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+#audio-banner.visible { display: block; }
+#rag-pill {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+  background: rgba(103,126,234,0.9); color: #fff;
+  padding: 5px 14px; border-radius: 20px; font-size: 11px;
+  z-index: 500; pointer-events: none; display: none;
+  backdrop-filter: blur(6px);
+}
+#rag-pill.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div id="status-overlay">
+  <span id="status-icon">📷</span>
+  <span id="status-text">Initialising...</span>
+</div>
+<div id="rag-pill">📊 Using live data + knowledge</div>
+<div id="lang-pill">🌐 <span id="lang-pill-text">English</span></div>
+
+<a-scene
+  id="ar-scene"
+  mindar-image="imageTargetSrc: targets.mind;
+                autoStart: false;
+                uiLoading: no; uiError: no; uiScanning: no;
+                maxTrack: 1;
+                filterMinCF: 0.001;
+                filterBeta: 0.01;
+                missTolerance: 200;
+                warmupTolerance: 1;"
+  color-space="sRGB"
+  renderer="colorManagement: true; physicallyCorrectLights: true;"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+  <a-assets timeout="0"></a-assets>
+  <a-camera active="false" position="0 0 0"></a-camera>
+  <a-entity id="mindar-target" mindar-image-target="targetIndex: 0">
+    <a-entity id="avatar-anchor" position="0 0.1 0" scale="2 2 2" rotation="90 0 0"></a-entity>
+  </a-entity>
+</a-scene>
+
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p id="loading-text">Starting AR engine...</p>
+  <button id="retry-btn" onclick="location.reload()">Retry</button>
+</div>
+
+<div id="instructions">
+  <div id="instructions-card">
+    <h2>Shankh AR</h2>
+    <p class="subtitle">RAG-powered AR Financial Assistant · Multilingual</p>
+    <div id="marker-preview"><img src="marker.jpg" alt="Marker"></div>
+    <div class="step"><span class="step-num">1</span>Print or display the marker image</div>
+    <div class="step"><span class="step-num">2</span>Tap Start AR and allow camera</div>
+    <div class="step"><span class="step-num">3</span>Point camera at the marker</div>
+    <div class="step"><span class="step-num">4</span>Speak in any Indian language — Shankh auto-detects and replies in kind!</div>
+    <button id="start-btn" onclick="startAR()">Start AR Experience</button>
+  </div>
+</div>
+
+<div id="audio-banner" onclick="unlockAndPlay()">👆 Tap here to hear Shankh speak</div>
+
+<div id="chat-overlay">
+  <div id="lang-bar">
+    <span class="lang-label">🌐 LANGUAGE</span>
+    <div id="lang-select-wrap">
+      <span id="lang-flag">🇮🇳</span>
+      <select id="lang-select">
+        <option value="en"  data-flag="🇬🇧">English</option>
+        <option value="hi"  data-flag="🇮🇳">हिन्दी</option>
+        <option value="bn"  data-flag="🇮🇳">বাংলা</option>
+        <option value="gu"  data-flag="🇮🇳">ગુજરાતી</option>
+        <option value="kn"  data-flag="🇮🇳">ಕನ್ನಡ</option>
+        <option value="ml"  data-flag="🇮🇳">മലയാളം</option>
+        <option value="mr"  data-flag="🇮🇳">मराठी</option>
+        <option value="or"  data-flag="🇮🇳">ଓଡ଼ିଆ</option>
+        <option value="pa"  data-flag="🇮🇳">ਪੰਜਾਬੀ</option>
+        <option value="ta"  data-flag="🇮🇳">தமிழ்</option>
+        <option value="te"  data-flag="🇮🇳">తెలుగు</option>
+        <option value="ur"  data-flag="🇮🇳">اردو</option>
+        <option value="as"  data-flag="🇮🇳">অসমীয়া</option>
+        <option value="mni" data-flag="🇮🇳">মৈতৈলোন্</option>
+        <option value="sat" data-flag="🇮🇳">ᱥᱟᱱᱛᱟᱲᱤ</option>
+      </select>
+      <span id="tts-engine-badge">Bhashini TTS</span>
+    </div>
+  </div>
+  <div id="chat-messages"></div>
+  <div id="input-container">
+    <input type="text" id="user-input" placeholder="Ask about stocks, finance...">
+    <button id="voice-btn" title="Voice Input">🎤</button>
+    <button id="send-btn">Send</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG — replace placeholders before deploying
+// ─────────────────────────────────────────────────────────────────────────────
+try {
+  if (window.tf && window.tf.wasm && window.tf.wasm.setWasmPaths)
+    window.tf.wasm.setWasmPaths(window.location.origin + '/');
+} catch(e) {}
+
+const SERVER_URL = window.location.origin;
+
+const CONFIG = {
+  OPENAI_API_KEY : 'YOUR_OPENAI_API_KEY_HERE',
+  MODEL          : 'gpt-4o-mini',
+  AVATAR_NAME    : 'Shankh',
+
+  // ── Bhashini credentials ──────────────────────────────────────────────────
+  // Register at: https://bhashini.gov.in/ulca/user/register
+  // Then copy userID and ulcaApiKey from your ULCA profile dashboard.
+  BHASHINI_USER_ID : 'YOUR_BHASHINI_USER_ID_HERE',
+  BHASHINI_API_KEY : 'YOUR_BHASHINI_API_KEY_HERE',
+
+  // Inference endpoint (Dhruva) — stable as of 2024
+  BHASHINI_INFER_URL  : 'https://dhruva-api.bhashini.gov.in/services/inference/pipeline',
+  // Pipeline search endpoint — used once per language to look up serviceId
+  BHASHINI_SEARCH_URL : 'https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Language metadata
+// ─────────────────────────────────────────────────────────────────────────────
+const LANG_META = {
+  en  : { bhashini:'en',  name:'English',    flag:'🇬🇧', browserLang:'en-IN'  },
+  hi  : { bhashini:'hi',  name:'Hindi',      flag:'🇮🇳', browserLang:'hi-IN'  },
+  bn  : { bhashini:'bn',  name:'Bengali',    flag:'🇮🇳', browserLang:'bn-IN'  },
+  gu  : { bhashini:'gu',  name:'Gujarati',   flag:'🇮🇳', browserLang:'gu-IN'  },
+  kn  : { bhashini:'kn',  name:'Kannada',    flag:'🇮🇳', browserLang:'kn-IN'  },
+  ml  : { bhashini:'ml',  name:'Malayalam',  flag:'🇮🇳', browserLang:'ml-IN'  },
+  mr  : { bhashini:'mr',  name:'Marathi',    flag:'🇮🇳', browserLang:'mr-IN'  },
+  or  : { bhashini:'or',  name:'Odia',       flag:'🇮🇳', browserLang:'or-IN'  },
+  pa  : { bhashini:'pa',  name:'Punjabi',    flag:'🇮🇳', browserLang:'pa-IN'  },
+  ta  : { bhashini:'ta',  name:'Tamil',      flag:'🇮🇳', browserLang:'ta-IN'  },
+  te  : { bhashini:'te',  name:'Telugu',     flag:'🇮🇳', browserLang:'te-IN'  },
+  ur  : { bhashini:'ur',  name:'Urdu',       flag:'🇮🇳', browserLang:'ur-IN'  },
+  as  : { bhashini:'as',  name:'Assamese',   flag:'🇮🇳', browserLang:'as-IN'  },
+  mni : { bhashini:'mni', name:'Manipuri',   flag:'🇮🇳', browserLang:'en-IN'  },
+  sat : { bhashini:'sat', name:'Santali',    flag:'🇮🇳', browserLang:'en-IN'  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bhashini helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Cache: langKey → Bhashini TTS serviceId (one lookup per language per session)
+const _serviceIdCache = {};
+
+/**
+ * Fetch Bhashini TTS serviceId for a given language via the pipeline-search API.
+ * Cached after first call.
+ */
+// Hardcoded Bhashini Dhruva TTS serviceIds — no pipeline lookup needed
+const BHASHINI_SERVICE_IDS = {
+  hi : 'ai4bharat/indic-tts-coqui-hi-gpu--t4',
+  ta : 'ai4bharat/indic-tts-coqui-ta-gpu--t4',
+  te : 'ai4bharat/indic-tts-coqui-te-gpu--t4',
+  kn : 'ai4bharat/indic-tts-coqui-kn-gpu--t4',
+  ml : 'ai4bharat/indic-tts-coqui-ml-gpu--t4',
+  bn : 'ai4bharat/indic-tts-coqui-bn-gpu--t4',
+  mr : 'ai4bharat/indic-tts-coqui-mr-gpu--t4',
+  gu : 'ai4bharat/indic-tts-coqui-gu-gpu--t4',
+  pa : 'ai4bharat/indic-tts-coqui-pa-gpu--t4',
+  or : 'ai4bharat/indic-tts-coqui-or-gpu--t4',
+  as : 'ai4bharat/indic-tts-coqui-as-gpu--t4',
+  ur : 'ai4bharat/indic-tts-coqui-ur-gpu--t4',
+  mni: 'ai4bharat/indic-tts-coqui-mni-gpu--t4',
+  sat: 'ai4bharat/indic-tts-coqui-sat-gpu--t4',
+  en : 'ai4bharat/indic-tts-coqui-en-gpu--t4',
+};
+
+async function getBhashiniServiceId(langKey) {
+  if (_serviceIdCache[langKey]) return _serviceIdCache[langKey];
+
+  // Use hardcoded serviceId (avoids unreliable pipeline lookup)
+  const hardcoded = BHASHINI_SERVICE_IDS[langKey];
+  if (hardcoded) {
+    _serviceIdCache[langKey] = hardcoded;
+    console.log('✅ Bhashini serviceId ['+langKey+']:', hardcoded);
+    return hardcoded;
+  }
+
+  // Dynamic lookup fallback (tries both auth header styles)
+  const srcLang = LANG_META[langKey]?.bhashini || langKey;
+  const body = {
+    pipelineTasks: [{ taskType:'tts', config:{ language:{ sourceLanguage: srcLang } } }],
+    pipelineRequestConfig: { pipelineId:'64392f96daac500b55c543cd' }
+  };
+  try {
+    const res = await fetch(CONFIG.BHASHINI_SEARCH_URL, {
+      method : 'POST',
+      headers: {
+        'Content-Type' : 'application/json',
+        'userID'       : CONFIG.BHASHINI_USER_ID,
+        'ulcaApiKey'   : CONFIG.BHASHINI_API_KEY,
+        'Authorization': CONFIG.BHASHINI_API_KEY,
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('Pipeline search HTTP ' + res.status);
+    const data = await res.json();
+    const ttsConfig = data?.pipelineResponseConfig?.find(c => c.taskType === 'tts');
+    const serviceId = ttsConfig?.config?.[0]?.serviceId;
+    if (!serviceId) throw new Error('No serviceId in pipeline response');
+    _serviceIdCache[langKey] = serviceId;
+    console.log('✅ Bhashini serviceId ['+langKey+'] (dynamic):', serviceId);
+    return serviceId;
+  } catch(e) {
+    console.error('getBhashiniServiceId error:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Call Bhashini Dhruva inference to synthesise speech.
+ * Returns an ArrayBuffer (WAV audio bytes).
+ */
+async function bhashiniTTS(text, langKey) {
+  const srcLang   = LANG_META[langKey]?.bhashini || langKey;
+  const serviceId = await getBhashiniServiceId(langKey);
+  if (!serviceId) throw new Error('No Bhashini serviceId for ' + langKey);
+
+  const body = {
+    pipelineTasks:[{
+      taskType:'tts',
+      config:{
+        language    :{ sourceLanguage: srcLang },
+        serviceId   : serviceId,
+        gender      :'male',
+        samplingRate: 8000
+      }
+    }],
+    inputData:{
+      input:[{ source: text }],
+      audio:[{ audioContent:'' }]
+    }
+  };
+
+  const res = await fetch(CONFIG.BHASHINI_INFER_URL, {
+    method :'POST',
+    headers:{
+      'Content-Type' :'application/json',
+      'Authorization': CONFIG.BHASHINI_API_KEY,
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(`Bhashini TTS HTTP ${res.status}: ${msg}`);
+  }
+  const data    = await res.json();
+  const audioB64 = data?.pipelineResponse?.[0]?.audio?.[0]?.audioContent;
+  if (!audioB64) throw new Error('Bhashini returned no audio content');
+
+  // base64 → ArrayBuffer
+  const bin  = atob(audioB64);
+  const buf  = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+/**
+ * Translate English GPT reply → target language using GPT-4o-mini.
+ * Returns the original text unchanged if langKey === 'en' or if call fails.
+ */
+async function translateText(text, langKey) {
+  if (langKey === 'en') return text;
+  const langName = LANG_META[langKey]?.name || langKey;
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method :'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+CONFIG.OPENAI_API_KEY },
+      body   : JSON.stringify({
+        model      :'gpt-4o-mini',
+        max_tokens : 200,
+        temperature: 0.1,
+        messages   :[
+          { role:'system', content:`Translate the following text to ${langName}. Return ONLY the translation, no explanation, no quotes.` },
+          { role:'user',   content: text }
+        ]
+      })
+    });
+    if (!res.ok) throw new Error('Translate HTTP ' + res.status);
+    const d = await res.json();
+    return d.choices[0].message.content.trim();
+  } catch(e) {
+    console.warn('Translation fallback (en):', e.message);
+    return text;
+  }
+}
+
+/**
+ * Auto-detect language of spoken transcript using GPT-4o-mini (fast, ~50ms).
+ * Returns ISO 639-1 code string, or null on failure.
+ */
+async function detectLang(text) {
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method :'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+CONFIG.OPENAI_API_KEY },
+      body   : JSON.stringify({
+        model      :'gpt-4o-mini',
+        max_tokens : 5,
+        temperature: 0,
+        messages   :[
+          { role:'system', content:'Detect the language of the text. Reply with ONLY the ISO 639-1 code (e.g. hi, ta, en, bn, te, kn, ml, gu, mr, pa, or, ur, as). Nothing else.' },
+          { role:'user',   content: text }
+        ]
+      })
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    const code = d.choices[0].message.content.trim().toLowerCase().replace(/[^a-z]/g,'');
+    return LANG_META[code] ? code : null;
+  } catch(e) {
+    console.warn('detectLang failed:', e.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stock keywords / symbols
+// ─────────────────────────────────────────────────────────────────────────────
+const STOCK_KEYWORDS = [
+  'stock','share','price','nifty','sensex','market','invest','buy','sell',
+  'reliance','tcs','infosys','infy','hdfc','icici','sbi','wipro','bajaj',
+  'titan','maruti','ipo','trading','portfolio','dividend','pe ratio',
+  'market cap','bse','nse','banknifty','midcap','smallcap','bluechip',
+  'equity','mutual fund','should i','worth buying','good investment','recommend',
+  // Hindi / Hinglish
+  'nivesh','kharidna','bechna','sheyar','bazaar','suchkank','senseks',
+];
+const STOCK_SYMBOL_MAP = {
+  'reliance':'RELIANCE','tcs':'TCS','infosys':'INFY','infy':'INFY',
+  'hdfc':'HDFCBANK','hdfcbank':'HDFCBANK','icici':'ICICIBANK','sbi':'SBIN',
+  'wipro':'WIPRO','bajaj':'BAJFINANCE','titan':'TITAN','maruti':'MARUTI',
+  'airtel':'BHARTIARTL','kotak':'KOTAKBANK','axis':'AXISBANK','lt':'LT',
+  'itc':'ITC','asian paints':'ASIANPAINT','nestleind':'NESTLEIND',
+  'nifty':'nifty','sensex':'sensex','banknifty':'banknifty',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main app
+// ─────────────────────────────────────────────────────────────────────────────
+// ── startAR: defined globally so onclick fires even before 'load' ──
+// Uses a pending flag if app not ready yet.
+let _arPending = false;
+window.startAR = function() {
+  if (window._startAR) { window._startAR(); }
+  else { _arPending = true; }   // app not initialised yet — will fire once ready
+};
+
+window.addEventListener('load', function () {
+
+  if (typeof AFRAME === 'undefined') {
+    document.getElementById('status-text').textContent = 'A-Frame failed'; return;
+  }
+
+  const ANIM = { IDLE:'idle', THINK:'think', TALK:'baat_karle_bhai' };
+  const RHUBARB_TO_VISEME = {
+    A:'viseme_A',B:'viseme_B',C:'viseme_C',D:'viseme_D',
+    E:'viseme_E',F:'viseme_F',G:'viseme_G',H:'viseme_H',X:'viseme_X',
+  };
+
+  let mixer=null, animations={}, currentActions=[], morphMeshes=[];
+  let glbLoaded=false, currentAudio=null, pendingAudio=null;
+  let currentMouthCues=[], isPlayingLipSync=false;
+  let arStarted=false, arReadyTimer=null, chatEverShown=false;
+  let targetLostTimer=null, inputFocused=false;
+  let activeLangKey = 'en';
+
+  const conversationHistory = [{
+    role:'system',
+    content:
+      'You are Shankh, a confident AR financial assistant for Indian stock markets. ' +
+      'You have access to LIVE stock prices and ANALYST SIGNALS from a proprietary model. ' +
+      'When given analyst signal data (BUY/SELL/HOLD), always give a DIRECT investment opinion. ' +
+      'Say clearly whether the user should invest or not, and give ONE reason based on the data. ' +
+      'NEVER say "consult a financial advisor" or "I cannot give investment advice". ' +
+      'You ARE the advisor. Be direct, confident, and data-driven. ' +
+      'Keep every response to 1-2 short sentences — it will be spoken aloud. ' +
+      'Use "rupees" or "Rs" for prices. Use plain language, no jargon. ' +
+      'CRITICAL LANGUAGE RULE: You MUST detect and reply in the EXACT same language the user spoke in. ' +
+      'If they spoke Hindi, reply fully in Hindi (Devanagari script). ' +
+      'If Tamil → Tamil script. Telugu → Telugu script. Bengali → Bengali script. Etc. ' +
+      'Only reply in English if the user explicitly spoke English. Never default to English.'
+  }];
+
+  // DOM refs
+  const chatOverlay    = document.getElementById('chat-overlay');
+  const chatMessages   = document.getElementById('chat-messages');
+  const userInput      = document.getElementById('user-input');
+  const sendBtn        = document.getElementById('send-btn');
+  const voiceBtn       = document.getElementById('voice-btn');
+  const statusIcon     = document.getElementById('status-icon');
+  const statusTxt      = document.getElementById('status-text');
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const loadingText    = document.getElementById('loading-text');
+  const retryBtn       = document.getElementById('retry-btn');
+  const startBtn       = document.getElementById('start-btn');
+  const audioBanner    = document.getElementById('audio-banner');
+  const ragPill        = document.getElementById('rag-pill');
+  const sceneEl        = document.getElementById('ar-scene');
+  const targetEl       = document.querySelector('[mindar-image-target]');
+  const anchorEl       = document.getElementById('avatar-anchor');
+  const langSelect     = document.getElementById('lang-select');
+  const langFlag       = document.getElementById('lang-flag');
+  const langPill       = document.getElementById('lang-pill');
+  const langPillText   = document.getElementById('lang-pill-text');
+
+  // ── Language UI ──────────────────────────────────────────────────────────
+  function setActiveLang(key, showPill) {
+    if (!LANG_META[key]) return;
+    activeLangKey      = key;
+    langSelect.value   = key;
+    const opt          = langSelect.querySelector(`option[value="${key}"]`);
+    langFlag.textContent = opt?.dataset?.flag || '🌐';
+    if (showPill) {
+      langPillText.textContent = LANG_META[key].name;
+      langPill.classList.add('visible');
+      setTimeout(() => langPill.classList.remove('visible'), 3500);
+    }
+    // Pre-warm Bhashini serviceId lookup in background
+    if (key !== 'en') getBhashiniServiceId(key).catch(()=>{});
+    console.log(`🌐 Language → ${key} (${LANG_META[key].name})`);
+  }
+
+  langSelect.addEventListener('change', () => setActiveLang(langSelect.value, true));
+
+  // ── Input guards ─────────────────────────────────────────────────────────
+  userInput.addEventListener('focus', () => { inputFocused = true;  });
+  userInput.addEventListener('blur',  () => { inputFocused = false; });
+
+  function setStatus(icon, text) { statusIcon.textContent=icon; statusTxt.textContent=text; }
+
+  function addMessage(text, type, source) {
+    const d = document.createElement('div');
+    d.className = 'message '+(type||'bot')+'-message';
+    d.textContent = text;
+    chatMessages.appendChild(d);
+    if (source) {
+      const s = document.createElement('div');
+      s.className = 'rag-indicator';
+      s.textContent = '  via '+source;
+      chatMessages.appendChild(s);
+    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function showChat() { chatEverShown=true; chatOverlay.classList.add('active'); }
+  function hideChat() {
+    if (!chatEverShown||inputFocused||isPlayingLipSync||sendBtn.disabled) return;
+    chatOverlay.classList.remove('active');
+  }
+
+  window.unlockAndPlay = function() {
+    audioBanner.classList.remove('visible');
+    if (pendingAudio) { pendingAudio.play().catch(e=>console.error(e)); pendingAudio=null; }
+  };
+
+  // ── Stock helpers ─────────────────────────────────────────────────────────
+  function detectStockQuery(q) { return STOCK_KEYWORDS.some(k=>q.toLowerCase().includes(k)); }
+  function extractStockSymbol(q) {
+    const ql = q.toLowerCase();
+    for (const [name,sym] of Object.entries(STOCK_SYMBOL_MAP)) if (ql.includes(name)) return sym;
+    const m = q.match(/\b([A-Z]{2,10})\b/); return m ? m[1] : null;
+  }
+  async function fetchStockData(symbol) {
+    try {
+      const [pR,iR] = await Promise.allSettled([
+        fetch(SERVER_URL+'/stock/price',    {method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({symbol})}),
+        fetch(SERVER_URL+'/stock/insights', {method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({stock_name:symbol.toLowerCase()})})
+      ]);
+      const priceData    = (pR.status==='fulfilled'&&pR.value.ok) ? await pR.value.json() : null;
+      const insightsData = (iR.status==='fulfilled'&&iR.value.ok) ? await iR.value.json() : null;
+      return { priceData, insightsData };
+    } catch(e) { console.warn('Stock fetch failed:',e.message); return {priceData:null,insightsData:null}; }
+  }
+  function formatStockContext(symbol, priceData, insightsData) {
+    const parts=[];
+    if (priceData) {
+      const change = priceData.change_percent!=null ? ` (${priceData.change_percent>0?'+':''}${priceData.change_percent}% today)` : '';
+      parts.push(
+        `LIVE MARKET DATA for ${priceData.company_name||symbol}:\n`+
+        `• Current price: Rs ${priceData.current_price}${change}\n`+
+        (priceData.day_high ? `• Day range: Rs ${priceData.day_low} – Rs ${priceData.day_high}\n` : '')+
+        (priceData.pe_ratio ? `• P/E ratio: ${priceData.pe_ratio.toFixed(1)}\n` : '')+
+        (priceData.volume   ? `• Volume: ${Number(priceData.volume).toLocaleString('en-IN')}\n` : '')+
+        `• Data as of: ${new Date(priceData.timestamp).toLocaleTimeString('en-IN')}`
+      );
+    }
+    if (insightsData) {
+      parts.push(
+        `ANALYST SIGNALS for ${insightsData.stock_name} (${insightsData.ticker}):\n`+
+        `• Our model signal: ${insightsData.signal_label}\n`+
+        `• FMP analyst rec : ${insightsData.fmp_rec}\n`+
+        `• Agreement       : ${insightsData.agreement}\n`+
+        `• Data date       : ${insightsData.date}\n\n`+
+        `Give a direct investment opinion in 1-2 sentences. Start with "Yes," or "No," or "Hold off".`
+      );
+    } else if (priceData) {
+      parts.push(`No analyst signal for ${symbol}. Give a brief observation based on the price.`);
+    }
+    return parts.length ? parts.join('\n\n') : null;
+  }
+  async function retrieveContext(query) {
+    try {
+      const ctrl = new AbortController();
+      const t    = setTimeout(()=>ctrl.abort(),2000);
+      const res  = await fetch(SERVER_URL+'/retrieve',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+        body:JSON.stringify({query,k:3,threshold:0.3}),
+        signal:ctrl.signal
+      });
+      clearTimeout(t);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.results?.length) return null;
+      return data.results.map((r,i)=>`[${i+1}] ${r.excerpt} (Source: ${r.filename}, p.${r.page_num})`).join('\n');
+    } catch(e) { if(e.name!=='AbortError') console.warn('RAG failed:',e.message); return null; }
+  }
+
+  // ── Core: send message ────────────────────────────────────────────────────
+  async function sendMessage(message) {
+    message = message.trim(); if (!message) return;
+    addMessage(message,'user'); userInput.value=''; sendBtn.disabled=true;
+    playAnim(ANIM.THINK); setStatus('📊','Fetching data...');
+    try {
+      const isStockQuery = detectStockQuery(message);
+      const stockSymbol  = isStockQuery ? extractStockSymbol(message) : null;
+      const [ragCtx, stockResult] = await Promise.all([
+        retrieveContext(message),
+        stockSymbol ? fetchStockData(stockSymbol) : Promise.resolve(null)
+      ]);
+      const contextParts=[]; let sourceLabel=null;
+      if (ragCtx) { contextParts.push('RELEVANT KNOWLEDGE BASE:\n'+ragCtx); sourceLabel='📚 KB'; }
+      if (stockResult?.priceData || stockResult?.insightsData) {
+        const ctx = formatStockContext(stockSymbol,stockResult.priceData,stockResult.insightsData);
+        if (ctx) {
+          contextParts.push(ctx);
+          sourceLabel = sourceLabel ? '📚 KB + 📊 Live'
+            : stockResult.insightsData ? `📊 ${stockResult.insightsData.signal_label}` : '📊 Live';
+        }
+      }
+      if (contextParts.length) { ragPill.classList.add('visible'); setTimeout(()=>ragPill.classList.remove('visible'),3000); }
+
+      // ── Detect language BEFORE calling GPT so reply is in correct lang ──
+      setStatus('🔍','Detecting language...');
+      const detectedLang = await detectLang(message);
+      if (detectedLang && detectedLang !== activeLangKey) {
+        setActiveLang(detectedLang, true);
+      }
+      const replyLang     = activeLangKey;
+      const replyLangName = LANG_META[replyLang]?.name || 'English';
+
+      // Per-turn language instruction — overrides everything
+      const langForceMsg = {
+        role:'system',
+        content:`The user is speaking ${replyLangName}. You MUST reply ONLY in ${replyLangName}. ` +
+                `Use the native script for ${replyLangName}. Do NOT use English in your reply.`
+      };
+
+      const msgs = [...conversationHistory, langForceMsg];
+      if (contextParts.length)
+        msgs.push({role:'system',content:'Use the following data:\n\n'+contextParts.join('\n\n---\n\n')});
+      msgs.push({role:'user',content:message});
+
+      setStatus('💭','Getting answer...');
+      const res = await fetch('https://api.openai.com/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+CONFIG.OPENAI_API_KEY},
+        body:JSON.stringify({model:CONFIG.MODEL,messages:msgs,max_tokens:180,temperature:0.7})
+      });
+      if (!res.ok) throw new Error('OpenAI '+res.status);
+      const reply = (await res.json()).choices[0].message.content;
+      conversationHistory.push({role:'user',content:message},{role:'assistant',content:reply});
+      addMessage(reply,'bot',sourceLabel);
+
+      // Speak directly via Bhashini TTS — no translation needed, GPT already replied in target lang
+      await speakBhashini(reply, replyLang);
+
+    } catch(err) {
+      console.error('sendMessage:', err);
+      addMessage('Error: '+err.message,'bot');
+      playAnim(ANIM.IDLE);
+    } finally { sendBtn.disabled=false; }
+  }
+
+  // ── Bhashini TTS pipeline ─────────────────────────────────────────────────
+  /**
+   * Full flow:
+   *  1. Translate English reply → activeLangKey (GPT-4o-mini)
+   *  2. Fetch Bhashini TTS audio + Rhubarb mouth cues in parallel
+   *  3. Play audio with lip-sync
+   *  4. On any Bhashini failure → fall back to original Rhubarb/OpenAI TTS
+   */
+  async function speakBhashini(nativeText, langKey) {
+    // GPT already replied in the target language — feed directly to Bhashini TTS
+    const spokenText = nativeText;
+    setStatus('🎙️',`Generating speech (Bhashini · ${LANG_META[langKey]?.name})...`);
+
+    try {
+      // Run audio synthesis + mouth-cue fetch in parallel for speed
+      const [audioRes, cuesRes] = await Promise.allSettled([
+        bhashiniTTS(spokenText, langKey),
+        fetchRhubarbCues(spokenText)    // cues from spoken text (phoneme timing)
+      ]);
+
+      currentMouthCues = (cuesRes.status==='fulfilled' && cuesRes.value) ? cuesRes.value : [];
+
+      if (audioRes.status === 'rejected') throw audioRes.reason;
+
+      const blob  = new Blob([audioRes.value], { type:'audio/wav' });
+      const url   = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.preload = 'auto';
+      currentAudio  = audio;
+
+      audio.addEventListener('playing', () => {
+        isPlayingLipSync = true;
+        audioBanner.classList.remove('visible');
+        setStatus('💬',`Speaking (${LANG_META[langKey]?.name})...`);
+        playAnim(ANIM.TALK);
+        animateMouth();
+      });
+      audio.addEventListener('ended', () => {
+        isPlayingLipSync=false; currentAudio=null; pendingAudio=null;
+        resetMouth(); playAnim(ANIM.IDLE);
+        setStatus('✅','Ready to chat');
+        URL.revokeObjectURL(url);
+      });
+      audio.addEventListener('error', () => {
+        isPlayingLipSync=false; pendingAudio=null;
+        resetMouth(); playAnim(ANIM.IDLE);
+        setStatus('❌','Audio error');
+        URL.revokeObjectURL(url);
+      });
+
+      const p = audio.play();
+      if (p!==undefined) p.catch(e=>{
+        if (e.name==='NotAllowedError') {
+          pendingAudio = audio;
+          audioBanner.classList.add('visible');
+          setStatus('👆','Tap banner to hear response');
+        } else {
+          setStatus('❌','Playback: '+e.message);
+        }
+      });
+
+    } catch(err) {
+      // Bhashini unavailable — fall back gracefully to OpenAI TTS + Rhubarb
+      console.warn('Bhashini TTS failed, using fallback TTS:', err.message);
+      setStatus('⚠️','Bhashini unavailable — using fallback TTS');
+      await speakRhubarbFallback(spokenText);
+    }
+  }
+
+  // Fetch only Rhubarb mouth cues (no audio) for lip-sync timing
+  async function fetchRhubarbCues(text) {
+    try {
+      const res = await fetch(SERVER_URL+'/generate_lipsync',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+        body:JSON.stringify({text, api_key:CONFIG.OPENAI_API_KEY, cues_only:true})
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.lipsync?.mouthCues || null;
+    } catch(e) { return null; }
+  }
+
+  // Original OpenAI TTS + Rhubarb fallback (kept 100% intact)
+  async function speakRhubarbFallback(text) {
+    try {
+      setStatus('🎙️','Generating speech...');
+      const res = await fetch(SERVER_URL+'/generate_lipsync',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+        body:JSON.stringify({text,api_key:CONFIG.OPENAI_API_KEY})
+      });
+      if (!res.ok) throw new Error('Rhubarb '+res.status);
+      const data = await res.json();
+      currentMouthCues = data.lipsync.mouthCues;
+      const audio = new Audio(SERVER_URL+data.audio_url);
+      audio.preload='auto'; currentAudio=audio;
+      audio.addEventListener('playing',()=>{ isPlayingLipSync=true; audioBanner.classList.remove('visible'); setStatus('💬','Speaking...'); playAnim(ANIM.TALK); animateMouth(); });
+      audio.addEventListener('ended',()=>{ isPlayingLipSync=false; currentAudio=null; pendingAudio=null; resetMouth(); playAnim(ANIM.IDLE); setStatus('✅','Ready to chat'); });
+      audio.addEventListener('error',()=>{ isPlayingLipSync=false; pendingAudio=null; resetMouth(); playAnim(ANIM.IDLE); setStatus('❌','Audio error'); });
+      const p=audio.play();
+      if (p!==undefined) p.catch(e=>{ if(e.name==='NotAllowedError'){ pendingAudio=audio; audioBanner.classList.add('visible'); setStatus('👆','Tap banner'); } });
+    } catch(err) { console.error('Rhubarb fallback:', err); setStatus('❌','Speech error'); playAnim(ANIM.IDLE); }
+  }
+
+  // ── Avatar (unchanged) ────────────────────────────────────────────────────
+  function loadAvatar() {
+    if (glbLoaded) return;
+    // Wait for ES module loaders to be ready (they load async)
+    if (!window._loadersReady) {
+      console.log('⏳ Waiting for loaders...');
+      setTimeout(loadAvatar, 150);
+      return;
+    }
+    glbLoaded = true;
+    setStatus('⏳','Loading avatar...');
+
+    // AFRAME.THREE for all scene objects; ES-module loaders bridged via window._GLTFLoader etc.
+    const THREE      = AFRAME.THREE;
+    const GLTFLoader  = window._GLTFLoader;
+    const DRACOLoader = window._DRACOLoader;
+
+    console.log('🎭 loadAvatar — THREE r'+THREE.REVISION+' | GLTFLoader:'+!!GLTFLoader);
+
+    const smoothGroup = new THREE.Group();
+    sceneEl.object3D.add(smoothGroup);
+    smoothGroup.visible = false;
+    window._smoothGroup = smoothGroup;
+
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+    draco.preload();
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(draco);
+    loader.load('avatar_hq.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        if (gltf.animations?.length) {
+          mixer = new THREE.AnimationMixer(model);
+          gltf.animations.forEach(clip=>{
+            const clean=new THREE.AnimationClip(clip.name,clip.duration,
+              clip.tracks.filter(t=>!t.name.toLowerCase().includes('viseme')));
+            if (clean.tracks.length) animations[clip.name]=mixer.clipAction(clean);
+          });
+        }
+        model.traverse(child=>{
+          if(!child.isMesh||!child.morphTargetDictionary) return;
+          if(Object.keys(child.morphTargetDictionary).some(k=>k.startsWith('viseme_'))) morphMeshes.push(child);
+        });
+        smoothGroup.add(model);
+        const clock=new THREE.Clock(), tPos=new THREE.Vector3(), tQuat=new THREE.Quaternion(), tScale=new THREE.Vector3();
+        const LERP=0.15; let snapReady=false;
+        (function loop(){
+          requestAnimationFrame(loop);
+          if(mixer) mixer.update(clock.getDelta());
+          if(anchorEl.object3D.visible){
+            anchorEl.object3D.updateWorldMatrix(true,false);
+            anchorEl.object3D.matrixWorld.decompose(tPos,tQuat,tScale);
+            smoothGroup.visible=true;
+            if(!snapReady){ smoothGroup.position.copy(tPos); smoothGroup.quaternion.copy(tQuat); smoothGroup.scale.copy(tScale); snapReady=true; }
+            else{ smoothGroup.position.lerp(tPos,LERP); smoothGroup.quaternion.slerp(tQuat,LERP); smoothGroup.scale.lerp(tScale,LERP); }
+          } else { snapReady=false; }
+        })();
+        setStatus('🎯','Point camera at your marker');
+        playAnim(ANIM.IDLE);
+      },
+      p=>{ if(p.total) setStatus('⏳','Avatar '+Math.round(p.loaded/p.total*100)+'%'); },
+      err=>{ console.error('GLB:',err); setStatus('❌','Avatar failed'); }
+    );
+  }
+  function playAnim(name,loop){
+    if(loop===undefined) loop=true; if(!mixer) return;
+    const key=Object.keys(animations).find(k=>k.toLowerCase()===name.toLowerCase()); if(!key) return;
+    currentActions.forEach(a=>a.fadeOut(0.3)); currentActions=[];
+    const action=animations[key]; action.reset();
+    action.setLoop(loop?AFRAME.THREE.LoopRepeat:AFRAME.THREE.LoopOnce,Infinity);
+    action.clampWhenFinished=!loop; action.fadeIn(0.3).play(); currentActions.push(action);
+  }
+  function setViseme(name,intensity){
+    morphMeshes.forEach(mesh=>{
+      const d=mesh.morphTargetDictionary;
+      Object.keys(d).forEach(k=>{ if(k.startsWith('viseme_')) mesh.morphTargetInfluences[d[k]]=0; });
+      if(name&&d[name]!==undefined) mesh.morphTargetInfluences[d[name]]=intensity;
+    });
+  }
+  function resetMouth(){ setViseme(null,0); }
+  function animateMouth(){
+    if(!isPlayingLipSync||!currentAudio) return;
+    const t=currentAudio.currentTime;
+    const cue=currentMouthCues.find(c=>t>=c.start&&t<c.end);
+    setViseme(cue?RHUBARB_TO_VISEME[cue.value]:null,cue?0.85:0);
+    requestAnimationFrame(animateMouth);
+  }
+
+  // ── AR events ─────────────────────────────────────────────────────────────
+  sceneEl.addEventListener('arReady',()=>{
+    clearTimeout(arReadyTimer); loadingOverlay.classList.remove('active');
+    // Small delay ensures A-Frame scene is fully initialised before loading GLB
+    setTimeout(() => loadAvatar(), 100);
+    setStatus('🎯','Point camera at your marker');
+  });
+  sceneEl.addEventListener('arError',()=>{
+    clearTimeout(arReadyTimer); loadingText.textContent='Camera error — tap Retry';
+    retryBtn.style.display='block'; setStatus('❌','AR error');
+  });
+  targetEl.addEventListener('targetFound',()=>{
+    if(targetLostTimer){ clearTimeout(targetLostTimer); targetLostTimer=null; }
+    setTimeout(() => loadAvatar(), 50); loadingOverlay.classList.remove('active'); showChat();
+    anchorEl.object3D.visible=true;
+    if(window._smoothGroup) window._smoothGroup.visible=true;
+    setStatus('✅','Shankh is here! Ask anything');
+    playAnim(ANIM.IDLE);
+  });
+  targetEl.addEventListener('targetLost',()=>{
+    targetLostTimer=setTimeout(()=>{
+      anchorEl.object3D.visible=false;
+      if(window._smoothGroup) window._smoothGroup.visible=false;
+      hideChat(); setStatus('🎯','Point camera at your marker');
+      targetLostTimer=null;
+    },3000);
+  });
+
+  // ── Start AR ──────────────────────────────────────────────────────────────
+  // Full AR start logic as named inner function
+  function _startAR() {
+    if(arStarted) return; arStarted=true;
+    startBtn.disabled=true; startBtn.textContent='Starting...';
+    try{ const AC=window.AudioContext||window.webkitAudioContext; if(AC){ const ctx=new AC(); const buf=ctx.createBuffer(1,1,22050); const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); src.start(0); } }catch(e){}
+    try{ const d=new Audio(); d.src='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA'; d.play().catch(()=>{}); }catch(e){}
+    document.getElementById('instructions').style.display='none';
+    loadingOverlay.classList.add('active'); loadingText.textContent='Requesting camera...';
+    setStatus('⏳','Requesting camera...');
+    arReadyTimer=setTimeout(()=>{ loadingText.textContent='Taking too long — tap Retry'; retryBtn.style.display='block'; setStatus('❌','Check camera permission'); },30000);
+    const tryStart=()=>{
+      const sys=sceneEl.systems['mindar-image-system'];
+      if(sys){ loadingText.textContent='Starting AR engine...'; sys.start(); }
+      else{ loadingText.textContent='AR system not found — tap Retry'; retryBtn.style.display='block'; }
+    };
+    if(sceneEl.hasLoaded) tryStart(); else sceneEl.addEventListener('loaded',tryStart,{once:true});
+  }
+  window._startAR = _startAR;  // expose so global stub can call it
+  if (_arPending) { _arPending=false; _startAR(); }  // fire if user tapped before load
+
+  // ── Voice input with auto language detection ──────────────────────────────
+  /**
+   * How auto-detection works:
+   *
+   * 1. Browser SpeechRecognition captures audio using the currently active
+   *    language locale (improves accuracy for that language).
+   * 2. After getting the transcript, GPT-4o-mini classifies the language
+   *    in ~50ms using a single-token response.
+   * 3. If detected language differs from the current activeLangKey:
+   *    - setActiveLang() is called → dropdown updates, toast pill shows
+   *    - Recognition locale is updated for the next utterance
+   *    - Bhashini serviceId is pre-warmed in background
+   * 4. The message is then sent, and Shankh replies in the detected language.
+   *
+   * The dropdown still works as a manual override at any time.
+   */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizing = false;
+
+  if (SR) {
+    const rec = new SR();
+    rec.continuous     = false;
+    rec.interimResults = false;
+    rec.lang           = LANG_META[activeLangKey].browserLang;
+
+    rec.onresult = async (e) => {
+      const transcript = e.results[0][0].transcript;
+      voiceBtn.classList.remove('listening');
+      recognizing = false;
+      userInput.value = transcript;
+      // sendMessage handles detection internally — just forward transcript
+      await sendMessage(transcript);
+    };
+
+    rec.onerror = (e) => {
+      voiceBtn.classList.remove('listening');
+      recognizing = false;
+      if (e.error === 'no-speech') setStatus('🎤','No speech — try again');
+      else setStatus('❌','Voice error: '+e.error);
+    };
+    rec.onend = () => { voiceBtn.classList.remove('listening'); recognizing = false; };
+
+    voiceBtn.addEventListener('click',()=>{
+      if (recognizing) {
+        rec.stop();
+      } else {
+        rec.lang = LANG_META[activeLangKey]?.browserLang || 'en-IN';
+        try { rec.start(); } catch(e){ console.warn('rec.start():', e); return; }
+        voiceBtn.classList.add('listening');
+        recognizing = true;
+        setStatus('🎤',`Listening (${LANG_META[activeLangKey].name})...`);
+      }
+    });
+
+    // Keep recognition locale in sync with manual dropdown change
+    langSelect.addEventListener('change',()=>{
+      rec.lang = LANG_META[activeLangKey]?.browserLang || 'en-IN';
+    });
+
+  } else {
+    voiceBtn.disabled = true;
+    voiceBtn.title    = 'Voice not supported in this browser';
+  }
+
+  sendBtn.addEventListener('click', ()=>sendMessage(userInput.value));
+  userInput.addEventListener('keypress', e=>{ if(e.key==='Enter') sendMessage(userInput.value); });
+
+  setStatus('🎯','Ready — tap Start AR');
+  setActiveLang('en', false); // init UI silently
+});
+</script>
+</body>
+</html>
