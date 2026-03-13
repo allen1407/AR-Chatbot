@@ -2,13 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shankh AR Chatbot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0f1e">
+<title>Shankh AR · Financial Assistant</title>
 <link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-<!-- three.js loaders loaded as ES modules and bridged onto AFRAME.THREE -->
+
 <script type="importmap">
 {
   "imports": {
@@ -20,182 +25,348 @@
 <script type="module">
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-  // Bridge onto window so the main script can access them
-  window._GLTFLoader  = GLTFLoader;
-  window._DRACOLoader = DRACOLoader;
+  window._GLTFLoader   = GLTFLoader;
+  window._DRACOLoader  = DRACOLoader;
   window._loadersReady = true;
-  console.log('✅ GLTFLoader + DRACOLoader ready via ES module');
+  console.log('✅ GLTFLoader + DRACOLoader ready');
 </script>
 
 <style>
-* { box-sizing: border-box; }
-body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
-a-scene { position: fixed !important; top: 0; left: 0; width: 100% !important; height: 100% !important; }
-.mindar-ui-overlay, .mindar-ui-loading, .mindar-ui-scanning { display: none !important; }
-
-#status-overlay {
-  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,0.75); color: #fff;
-  padding: 10px 22px; border-radius: 30px; z-index: 500; font-size: 14px;
-  pointer-events: none; display: flex; align-items: center; gap: 8px;
-  backdrop-filter: blur(6px);
+:root {
+  --ink:       #0a0f1e;
+  --gold:      #f5c842;
+  --gold2:     #e6a800;
+  --teal:      #00d4b4;
+  --teal2:     #00a88e;
+  --border:    rgba(255,255,255,0.10);
+  --shadow:    0 24px 64px rgba(0,0,0,0.55);
+  --radius-sm: 12px;
+  --font-head: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Detected-language toast pill */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* CRITICAL: transparent so the camera feed (a-scene canvas) shows through */
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: var(--font-body);
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* a-scene renders the camera feed — must be full viewport at z=0 */
+a-scene {
+  position: fixed !important;
+  top: 0; left: 0;
+  width: 100% !important; height: 100% !important;
+  z-index: 0;
+}
+.mindar-ui-overlay,
+.mindar-ui-loading,
+.mindar-ui-scanning { display: none !important; }
+
+/* ── Status bar ── */
+#status-bar {
+  position: fixed;
+  top: calc(var(--safe-top) + 12px);
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(10,15,30,0.72);
+  border: 1px solid var(--border);
+  border-radius: 40px; padding: 8px 18px;
+  z-index: 500; pointer-events: none;
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  white-space: nowrap; max-width: calc(100vw - 32px);
+}
+#status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--teal); flex-shrink: 0;
+  box-shadow: 0 0 8px var(--teal); transition: background 0.3s;
+}
+#status-dot.warn { background: var(--gold);  box-shadow: 0 0 8px var(--gold); }
+#status-dot.err  { background: #ff4f6d;      box-shadow: 0 0 8px #ff4f6d; }
+#status-text {
+  font-family: var(--font-body);
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.85); letter-spacing: 0.3px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Language pill ── */
 #lang-pill {
-  position: fixed; top: 60px; right: 16px;
-  background: rgba(20,180,120,0.92); color: #fff;
-  padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
-  z-index: 600; pointer-events: none; display: none;
-  align-items: center; gap: 6px; backdrop-filter: blur(6px);
-  transition: opacity 0.3s;
+  position: fixed;
+  top: calc(var(--safe-top) + 60px); right: 16px;
+  background: linear-gradient(135deg, var(--teal), var(--teal2));
+  color: var(--ink); padding: 5px 14px 5px 10px;
+  border-radius: 40px; font-size: 11px; font-weight: 700;
+  font-family: var(--font-head); z-index: 600; pointer-events: none;
+  display: flex; align-items: center; gap: 6px;
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity 0.35s, transform 0.35s; letter-spacing: 0.4px;
 }
-#lang-pill.visible { display: flex; }
+#lang-pill.visible { opacity: 1; transform: translateY(0); }
 
+/* ── RAG pill ── */
+#rag-pill {
+  position: fixed;
+  top: calc(var(--safe-top) + 60px); left: 16px;
+  background: linear-gradient(135deg, #667eea, #4f5fb3);
+  color: #fff; padding: 5px 14px; border-radius: 40px;
+  font-size: 11px; font-weight: 700; font-family: var(--font-head);
+  letter-spacing: 0.4px; z-index: 500; pointer-events: none;
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity 0.35s, transform 0.35s;
+}
+#rag-pill.visible { opacity: 1; transform: translateY(0); }
+
+/* ── Splash screen (fully opaque — hides camera before user taps Start) ── */
 #instructions {
-  position: fixed; inset: 0; background: rgba(10,10,20,0.97);
-  display: flex; align-items: center; justify-content: center; z-index: 2000;
-}
-#instructions-card {
-  background: #1a1a2e; color: #eee; padding: 36px 28px; border-radius: 20px;
-  text-align: center; max-width: 340px; width: 90%;
-  border: 1px solid rgba(255,255,255,0.1);
-}
-#instructions-card h2 { margin: 0 0 4px; color: #4fc3f7; font-size: 22px; }
-#instructions-card .subtitle { color: #aaa; font-size: 12px; margin: 0 0 12px; }
-.step {
-  background: rgba(255,255,255,0.06); border-radius: 10px;
-  padding: 10px 14px; margin: 8px 0; font-size: 13px;
-  text-align: left; display: flex; align-items: flex-start; gap: 10px;
-}
-.step-num {
-  background: #667eea; color: #fff; border-radius: 50%;
-  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; flex-shrink: 0;
-}
-#marker-preview {
-  width: 130px; height: 130px; margin: 14px auto;
-  background: #fff; border-radius: 10px; padding: 8px;
+  position: fixed; inset: 0; z-index: 2000;
   display: flex; align-items: center; justify-content: center;
+  background: var(--ink);
+  background-image:
+    radial-gradient(ellipse 60% 40% at 50% 0%,  rgba(0,212,180,0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 80%,  rgba(245,200,66,0.08) 0%, transparent 60%);
 }
-#marker-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
-#start-btn {
-  margin-top: 18px; background: #4fc3f7; font-size: 15px;
-  padding: 12px 32px; width: 100%; border: none; border-radius: 24px;
-  color: #fff; font-weight: 600; cursor: pointer;
+#instructions::before {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg,  transparent, transparent 39px, rgba(255,255,255,0.025) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.025) 40px);
+  pointer-events: none;
 }
-#start-btn:disabled { background: #bbb; }
-#loading-overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(10,10,20,0.85);
-  align-items: center; justify-content: center;
-  z-index: 1500; flex-direction: column; gap: 16px;
+#splash-card {
+  position: relative;
+  width: min(360px, calc(100vw - 32px));
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 28px; padding: 36px 28px 32px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+  animation: cardIn 0.7s cubic-bezier(0.22,1,0.36,1) both;
 }
-#loading-overlay.active { display: flex; }
-.spinner {
-  width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2);
-  border-top-color: #4fc3f7; border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+@keyframes cardIn {
+  from { opacity:0; transform: translateY(32px) scale(0.97); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+.splash-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(0,212,180,0.15), rgba(0,212,180,0.05));
+  border: 1px solid rgba(0,212,180,0.3); border-radius: 40px;
+  padding: 4px 12px; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  color: var(--teal); font-family: var(--font-head); margin-bottom: 16px; text-transform: uppercase;
+}
+.splash-title {
+  font-family: var(--font-head); font-size: clamp(28px,8vw,36px);
+  font-weight: 800; color: #fff; line-height: 1; letter-spacing: -1px; margin-bottom: 4px;
+}
+.splash-title span {
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.splash-sub { font-size: 12px; color: rgba(255,255,255,0.45); font-weight: 400; margin-bottom: 24px; letter-spacing: 0.3px; }
+
+#marker-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 24px; }
+#marker-ring {
+  position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid transparent;
+  background: linear-gradient(var(--ink), var(--ink)) padding-box,
+              linear-gradient(135deg, var(--teal), var(--gold)) border-box;
+  animation: spin 8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-#loading-overlay p { color: #fff; font-size: 14px; margin: 0; }
+#marker-inner {
+  position: relative; width: 100%; height: 100%;
+  border-radius: 16px; overflow: hidden; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+#marker-inner img { width: 90%; height: 90%; object-fit: contain; }
+.marker-scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--teal), transparent);
+  animation: scanLine 2s ease-in-out infinite;
+}
+@keyframes scanLine { 0%{top:0%;opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{top:100%;opacity:0} }
+
+.steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.step {
+  display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+}
+.step-num {
+  min-width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; font-family: var(--font-head); flex-shrink: 0;
+  background: linear-gradient(135deg, var(--teal), #00b4a0); color: var(--ink);
+}
+.step p { font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+
+#start-btn {
+  width: 100%; padding: 15px 20px; border: none; outline: none; border-radius: 40px;
+  font-family: var(--font-head); font-size: 15px; font-weight: 700; letter-spacing: 0.5px;
+  cursor: pointer; position: relative; overflow: hidden;
+  background: linear-gradient(135deg, var(--teal), var(--gold2)); color: var(--ink);
+  box-shadow: 0 8px 32px rgba(0,212,180,0.35);
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+}
+#start-btn::before { content:''; position:absolute; inset:0; background:rgba(255,255,255,0.15); opacity:0; transition:opacity 0.2s; }
+#start-btn:active { transform: scale(0.97); }
+#start-btn:active::before { opacity: 1; }
+#start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Loading overlay (semi-transparent so camera peeks through) ── */
+#loading-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,15,30,0.75);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px; z-index: 1500;
+}
+#loading-overlay.active { display: flex; }
+.loader-ring { width: 56px; height: 56px; position: relative; }
+.loader-ring::before, .loader-ring::after {
+  content: ''; position: absolute; inset: 0;
+  border-radius: 50%; border: 3px solid transparent;
+}
+.loader-ring::before { border-top-color: var(--teal);  animation: spin 0.9s linear infinite; }
+.loader-ring::after  { border-bottom-color: var(--gold); animation: spin 1.4s linear infinite reverse; }
+#loading-text { font-size: 14px; color: rgba(255,255,255,0.7); text-align: center; }
 #retry-btn {
-  margin-top: 12px; padding: 10px 28px; background: #4fc3f7;
-  border: none; border-radius: 24px; color: #fff;
-  font-weight: 600; font-size: 14px; cursor: pointer; display: none;
+  padding: 11px 28px; background: linear-gradient(135deg, var(--teal), var(--teal2));
+  border: none; border-radius: 40px; font-family: var(--font-head);
+  font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; display: none;
 }
 
+/* ── Chat panel ── */
 #chat-overlay {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  width: 92%; max-width: 420px; background: rgba(255,255,255,0.96);
-  border-radius: 20px; padding: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
-  z-index: 1000; display: none;
-  touch-action: auto; pointer-events: all;
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 16px);
+  left: 50%; transform: translateX(-50%);
+  width: min(440px, calc(100vw - 24px));
+  background: rgba(10,15,30,0.82);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 24px; padding: 16px;
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  z-index: 1000; display: none; touch-action: pan-y;
 }
 #chat-overlay.active { display: block; }
 
-/* Language bar */
-#lang-bar {
+#chat-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px; padding: 0 2px;
+  margin-bottom: 12px; padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
 }
-#lang-bar .lang-label { font-size: 11px; color: #888; font-weight: 600; letter-spacing: 0.5px; }
-#lang-select-wrap { display: flex; align-items: center; gap: 6px; }
-#lang-flag { font-size: 18px; }
+.chat-brand { display: flex; align-items: center; gap: 8px; }
+.chat-avatar-icon {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--teal), var(--gold2));
+  display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+}
+.chat-brand-name { font-family: var(--font-head); font-size: 15px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+.chat-brand-sub  { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 400; display: block; line-height: 1; }
+
+#lang-control { display: flex; align-items: center; gap: 6px; }
+#lang-flag { font-size: 16px; line-height: 1; }
 #lang-select {
-  font-size: 12px; border: 1.5px solid #e4e8f0; border-radius: 16px;
-  padding: 4px 10px; background: #f4f6f9; color: #333;
-  outline: none; cursor: pointer; font-weight: 600;
+  font-size: 12px; font-weight: 500;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px; padding: 5px 10px; color: rgba(255,255,255,0.85);
+  outline: none; cursor: pointer; -webkit-appearance: none; appearance: none; max-width: 110px;
 }
-#tts-engine-badge {
-  font-size: 10px; padding: 2px 8px; border-radius: 10px;
-  background: #e8f5e9; color: #2e7d32; font-weight: 700;
-  border: 1px solid #a5d6a7;
+#lang-select option { background: #1a2035; color: #fff; }
+#tts-badge {
+  padding: 3px 8px; background: rgba(0,212,180,0.12);
+  border: 1px solid rgba(0,212,180,0.25); border-radius: 20px;
+  font-size: 9px; font-weight: 700; color: var(--teal);
+  font-family: var(--font-head); letter-spacing: 0.5px; white-space: nowrap;
 }
 
 #chat-messages {
-  max-height: 180px; overflow-y: auto; margin-bottom: 10px; padding: 8px;
-  background: #f4f6f9; border-radius: 12px; font-size: 13px;
+  max-height: 200px; overflow-y: auto; margin-bottom: 12px; padding: 4px 2px;
+  scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;
 }
+#chat-messages::-webkit-scrollbar { width: 4px; }
+#chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
 .message {
-  margin-bottom: 7px; padding: 7px 12px;
-  border-radius: 14px; line-height: 1.4; word-break: break-word;
+  padding: 9px 14px; border-radius: 16px;
+  font-size: 13px; line-height: 1.5; word-break: break-word;
+  margin-bottom: 6px; max-width: 88%;
+  animation: msgIn 0.25s cubic-bezier(0.22,1,0.36,1) both;
 }
-.user-message  { background: #667eea; color: #fff; text-align: right; margin-left: 18%; }
-.bot-message   { background: #e4e8f0; color: #222; margin-right: 18%; }
-.rag-indicator { font-size: 10px; color: #999; text-align: right; margin-top: 2px; }
-#input-container { display: flex; gap: 8px; }
+@keyframes msgIn { from{opacity:0;transform:translateY(8px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+.user-message { background: linear-gradient(135deg,#4f5fb3,#667eea); color:#fff; margin-left:auto; border-bottom-right-radius:4px; }
+.bot-message  { background: rgba(255,255,255,0.08); color:rgba(255,255,255,0.9); border-bottom-left-radius:4px; }
+.rag-indicator { font-size:10px; color:rgba(255,255,255,0.3); text-align:left; padding:0 4px 4px; letter-spacing:0.2px; }
+
+.typing-dots { display:flex; align-items:center; gap:4px; padding:10px 14px; background:rgba(255,255,255,0.08); border-radius:16px; border-bottom-left-radius:4px; width:fit-content; margin-bottom:6px; }
+.typing-dots span { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.4); animation:bounce 1.2s ease-in-out infinite; }
+.typing-dots span:nth-child(2){animation-delay:0.2s} .typing-dots span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+
+#input-row { display: flex; gap: 8px; align-items: center; }
 #user-input {
-  flex: 1; padding: 10px 14px; border: 2px solid #e4e8f0;
-  border-radius: 24px; outline: none; font-size: 16px;
+  flex: 1; padding: 11px 16px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px; font-size: 14px; color: #fff;
+  outline: none; transition: border-color 0.2s, background 0.2s; -webkit-text-size-adjust: 100%;
 }
-button {
-  padding: 10px 18px; border: none; border-radius: 24px;
-  background: #667eea; color: #fff; font-weight: 600;
-  cursor: pointer; font-size: 13px;
+#user-input::placeholder { color: rgba(255,255,255,0.3); }
+#user-input:focus { border-color: rgba(0,212,180,0.5); background: rgba(255,255,255,0.1); }
+
+.icon-btn {
+  width: 42px; height: 42px; min-width: 42px; border: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px;
+  transition: transform 0.15s, opacity 0.2s; -webkit-tap-highlight-color: transparent;
 }
-button:disabled { background: #bbb; cursor: not-allowed; }
-#voice-btn { background: #28a745; min-width: 44px; padding: 10px; }
-#voice-btn.listening { background: #dc3545; animation: pulse 0.9s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+#voice-btn { background: linear-gradient(135deg,#28a745,#20883a); box-shadow:0 4px 16px rgba(40,167,69,0.4); color:#fff; }
+#voice-btn.listening { background: linear-gradient(135deg,#dc3545,#b02030); animation:pulse 0.9s ease-in-out infinite; }
+@keyframes pulse{0%,100%{box-shadow:0 4px 16px rgba(220,53,69,0.5)}50%{box-shadow:0 4px 24px rgba(220,53,69,0.8)}}
+#send-btn { background: linear-gradient(135deg,var(--teal),var(--teal2)); box-shadow:0 4px 16px rgba(0,212,180,0.4); color:var(--ink); font-size:18px; }
+
 #audio-banner {
-  display: none; position: fixed; bottom: 220px; left: 50%;
-  transform: translateX(-50%);
-  background: rgba(255,140,0,0.95); color: #fff;
-  padding: 12px 24px; border-radius: 24px; font-size: 14px; font-weight: 600;
-  z-index: 1100; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  display: none; position: fixed;
+  bottom: calc(var(--safe-bottom) + 200px);
+  left: 50%; transform: translateX(-50%);
+  background: linear-gradient(135deg,#f59e0b,#d97706); color:#fff;
+  padding: 13px 24px; border-radius: 40px;
+  font-family: var(--font-head); font-size: 13px; font-weight: 700;
+  z-index: 1100; cursor: pointer;
+  box-shadow: 0 8px 32px rgba(245,158,11,0.45); white-space: nowrap;
 }
 #audio-banner.visible { display: block; }
-#rag-pill {
-  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-  background: rgba(103,126,234,0.9); color: #fff;
-  padding: 5px 14px; border-radius: 20px; font-size: 11px;
-  z-index: 500; pointer-events: none; display: none;
-  backdrop-filter: blur(6px);
-}
-#rag-pill.visible { display: block; }
+
+@media (max-height:680px) { #splash-card{padding:24px 20px} #marker-wrap{width:90px;height:90px} #chat-messages{max-height:140px} }
+@media (max-width:380px)  { #tts-badge{display:none} #chat-messages{max-height:160px} }
 </style>
 </head>
 <body>
 
-<div id="status-overlay">
-  <span id="status-icon">📷</span>
-  <span id="status-text">Initialising...</span>
-</div>
-<div id="rag-pill">📊 Using live data + knowledge</div>
+<div id="status-bar"><span id="status-dot"></span><span id="status-text">Initialising…</span></div>
+<div id="rag-pill">📊 Live data + knowledge</div>
 <div id="lang-pill">🌐 <span id="lang-pill-text">English</span></div>
 
+<!-- A-Frame scene: z-index 0, camera feed renders here -->
 <a-scene
   id="ar-scene"
   mindar-image="imageTargetSrc: targets.mind;
                 autoStart: false;
                 uiLoading: no; uiError: no; uiScanning: no;
                 maxTrack: 1;
-                filterMinCF: 0.001;
-                filterBeta: 0.01;
-                missTolerance: 200;
-                warmupTolerance: 1;"
+                filterMinCF: 0.001; filterBeta: 0.01;
+                missTolerance: 200; warmupTolerance: 1;"
   color-space="sRGB"
   renderer="colorManagement: true; physicallyCorrectLights: true;"
   vr-mode-ui="enabled: false"
@@ -203,35 +374,53 @@ button:disabled { background: #bbb; cursor: not-allowed; }
   <a-assets timeout="0"></a-assets>
   <a-camera active="false" position="0 0 0"></a-camera>
   <a-entity id="mindar-target" mindar-image-target="targetIndex: 0">
-    <a-entity id="avatar-anchor" position="0 0.1 0" scale="2 2 2" rotation="90 0 0"></a-entity>
+    <a-entity id="avatar-anchor"></a-entity>
   </a-entity>
 </a-scene>
 
 <div id="loading-overlay">
-  <div class="spinner"></div>
-  <p id="loading-text">Starting AR engine...</p>
+  <div class="loader-ring"></div>
+  <p id="loading-text">Starting AR engine…</p>
   <button id="retry-btn" onclick="location.reload()">Retry</button>
 </div>
 
 <div id="instructions">
-  <div id="instructions-card">
-    <h2>Shankh AR</h2>
-    <p class="subtitle">RAG-powered AR Financial Assistant · Multilingual</p>
-    <div id="marker-preview"><img src="marker.jpg" alt="Marker"></div>
-    <div class="step"><span class="step-num">1</span>Print or display the marker image</div>
-    <div class="step"><span class="step-num">2</span>Tap Start AR and allow camera</div>
-    <div class="step"><span class="step-num">3</span>Point camera at the marker</div>
-    <div class="step"><span class="step-num">4</span>Speak in any Indian language — Shankh auto-detects and replies in kind!</div>
-    <button id="start-btn" onclick="startAR()">Start AR Experience</button>
+  <div id="splash-card">
+    <div class="splash-badge">🇮🇳 AR Financial Assistant · Multilingual</div>
+    <div class="splash-title"><span>Shankh</span> AR</div>
+    <p class="splash-sub">RAG-powered · 15 Indian languages · Live stock data</p>
+    <div id="marker-wrap">
+      <div id="marker-ring"></div>
+      <div id="marker-inner">
+        <img src="marker.jpg" alt="AR Marker">
+        <div class="marker-scan-line"></div>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="step-num">1</span><p>Print or display the marker image shown above</p></div>
+      <div class="step"><span class="step-num">2</span><p>Tap <strong style="color:var(--teal)">Start AR</strong> and allow camera access</p></div>
+      <div class="step"><span class="step-num">3</span><p>Point your camera at the marker to meet Shankh</p></div>
+      <div class="step"><span class="step-num">4</span><p>Speak in any Indian language — Shankh auto-detects and replies!</p></div>
+    </div>
+    <button id="start-btn" onclick="startAR()">Start AR Experience →</button>
+    <script>
+      window.startAR = function(){ if(window._startAR) window._startAR(); else window._arPending=true; };
+    </script>
   </div>
 </div>
 
-<div id="audio-banner" onclick="unlockAndPlay()">👆 Tap here to hear Shankh speak</div>
+<div id="audio-banner" onclick="unlockAndPlay()">👆 Tap to hear Shankh speak</div>
 
 <div id="chat-overlay">
-  <div id="lang-bar">
-    <span class="lang-label">🌐 LANGUAGE</span>
-    <div id="lang-select-wrap">
+  <div id="chat-header">
+    <div class="chat-brand">
+      <div class="chat-avatar-icon">🐚</div>
+      <div>
+        <span class="chat-brand-name">Shankh</span>
+        <span class="chat-brand-sub">Financial AI · AR Mode</span>
+      </div>
+    </div>
+    <div id="lang-control">
       <span id="lang-flag">🇮🇳</span>
       <select id="lang-select">
         <option value="en"  data-flag="🇬🇧">English</option>
@@ -250,826 +439,577 @@ button:disabled { background: #bbb; cursor: not-allowed; }
         <option value="mni" data-flag="🇮🇳">মৈতৈলোন্</option>
         <option value="sat" data-flag="🇮🇳">ᱥᱟᱱᱛᱟᱲᱤ</option>
       </select>
-      <span id="tts-engine-badge">Bhashini TTS</span>
+      <span id="tts-badge">Bhashini TTS</span>
     </div>
   </div>
   <div id="chat-messages"></div>
-  <div id="input-container">
-    <input type="text" id="user-input" placeholder="Ask about stocks, finance...">
-    <button id="voice-btn" title="Voice Input">🎤</button>
-    <button id="send-btn">Send</button>
+  <div id="input-row">
+    <input type="text" id="user-input" placeholder="Ask about stocks, markets…" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="icon-btn" id="voice-btn" title="Voice Input">🎤</button>
+    <button class="icon-btn" id="send-btn">➤</button>
   </div>
 </div>
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIG — replace placeholders before deploying
+// CONFIG  (SERVER_URL auto-resolves from ngrok since Flask serves this file)
 // ─────────────────────────────────────────────────────────────────────────────
-try {
-  if (window.tf && window.tf.wasm && window.tf.wasm.setWasmPaths)
-    window.tf.wasm.setWasmPaths(window.location.origin + '/');
-} catch(e) {}
+try{ if(window.tf?.wasm?.setWasmPaths) window.tf.wasm.setWasmPaths(window.location.origin+'/'); }catch(e){}
 
-const SERVER_URL = window.location.origin;
+const SERVER_URL = window.location.origin;   // same origin as Flask/ngrok — always correct
 
 const CONFIG = {
-  OPENAI_API_KEY : 'YOUR_OPENAI_API_KEY_HERE',
-  MODEL          : 'gpt-4o-mini',
-  AVATAR_NAME    : 'Shankh',
-
-  // ── Bhashini credentials ──────────────────────────────────────────────────
-  // Register at: https://bhashini.gov.in/ulca/user/register
-  // Then copy userID and ulcaApiKey from your ULCA profile dashboard.
-  BHASHINI_USER_ID : 'YOUR_BHASHINI_USER_ID_HERE',
-  BHASHINI_API_KEY : 'YOUR_BHASHINI_API_KEY_HERE',
-
-  // Inference endpoint (Dhruva) — stable as of 2024
-  BHASHINI_INFER_URL  : 'https://dhruva-api.bhashini.gov.in/services/inference/pipeline',
-  // Pipeline search endpoint — used once per language to look up serviceId
-  BHASHINI_SEARCH_URL : 'https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline',
+  OPENAI_API_KEY   : 'Your_OpenAi_API_Key',
+  MODEL            : 'gpt-4o-mini',
+  BHASHINI_API_KEY : 'Your_Bhashini_Api_key',
+  BHASHINI_INFER_URL:'https://dhruva-api.bhashini.gov.in/services/inference/pipeline',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Language metadata
-// ─────────────────────────────────────────────────────────────────────────────
 const LANG_META = {
-  en  : { bhashini:'en',  name:'English',    flag:'🇬🇧', browserLang:'en-IN'  },
-  hi  : { bhashini:'hi',  name:'Hindi',      flag:'🇮🇳', browserLang:'hi-IN'  },
-  bn  : { bhashini:'bn',  name:'Bengali',    flag:'🇮🇳', browserLang:'bn-IN'  },
-  gu  : { bhashini:'gu',  name:'Gujarati',   flag:'🇮🇳', browserLang:'gu-IN'  },
-  kn  : { bhashini:'kn',  name:'Kannada',    flag:'🇮🇳', browserLang:'kn-IN'  },
-  ml  : { bhashini:'ml',  name:'Malayalam',  flag:'🇮🇳', browserLang:'ml-IN'  },
-  mr  : { bhashini:'mr',  name:'Marathi',    flag:'🇮🇳', browserLang:'mr-IN'  },
-  or  : { bhashini:'or',  name:'Odia',       flag:'🇮🇳', browserLang:'or-IN'  },
-  pa  : { bhashini:'pa',  name:'Punjabi',    flag:'🇮🇳', browserLang:'pa-IN'  },
-  ta  : { bhashini:'ta',  name:'Tamil',      flag:'🇮🇳', browserLang:'ta-IN'  },
-  te  : { bhashini:'te',  name:'Telugu',     flag:'🇮🇳', browserLang:'te-IN'  },
-  ur  : { bhashini:'ur',  name:'Urdu',       flag:'🇮🇳', browserLang:'ur-IN'  },
-  as  : { bhashini:'as',  name:'Assamese',   flag:'🇮🇳', browserLang:'as-IN'  },
-  mni : { bhashini:'mni', name:'Manipuri',   flag:'🇮🇳', browserLang:'en-IN'  },
-  sat : { bhashini:'sat', name:'Santali',    flag:'🇮🇳', browserLang:'en-IN'  },
+  en :{name:'English',  bhashini:'en', browserLang:'en-IN'},
+  hi :{name:'Hindi',    bhashini:'hi', browserLang:'hi-IN'},
+  bn :{name:'Bengali',  bhashini:'bn', browserLang:'bn-IN'},
+  gu :{name:'Gujarati', bhashini:'gu', browserLang:'gu-IN'},
+  kn :{name:'Kannada',  bhashini:'kn', browserLang:'kn-IN'},
+  ml :{name:'Malayalam',bhashini:'ml', browserLang:'ml-IN'},
+  mr :{name:'Marathi',  bhashini:'mr', browserLang:'mr-IN'},
+  or :{name:'Odia',     bhashini:'or', browserLang:'or-IN'},
+  pa :{name:'Punjabi',  bhashini:'pa', browserLang:'pa-IN'},
+  ta :{name:'Tamil',    bhashini:'ta', browserLang:'ta-IN'},
+  te :{name:'Telugu',   bhashini:'te', browserLang:'te-IN'},
+  ur :{name:'Urdu',     bhashini:'ur', browserLang:'ur-IN'},
+  as :{name:'Assamese', bhashini:'as', browserLang:'as-IN'},
+  mni:{name:'Manipuri', bhashini:'mni',browserLang:'en-IN'},
+  sat:{name:'Santali',  bhashini:'sat',browserLang:'en-IN'},
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bhashini helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Cache: langKey → Bhashini TTS serviceId (one lookup per language per session)
-const _serviceIdCache = {};
-
-/**
- * Fetch Bhashini TTS serviceId for a given language via the pipeline-search API.
- * Cached after first call.
- */
-// Hardcoded Bhashini Dhruva TTS serviceIds — no pipeline lookup needed
-const BHASHINI_SERVICE_IDS = {
-  hi : 'ai4bharat/indic-tts-coqui-hi-gpu--t4',
-  ta : 'ai4bharat/indic-tts-coqui-ta-gpu--t4',
-  te : 'ai4bharat/indic-tts-coqui-te-gpu--t4',
-  kn : 'ai4bharat/indic-tts-coqui-kn-gpu--t4',
-  ml : 'ai4bharat/indic-tts-coqui-ml-gpu--t4',
-  bn : 'ai4bharat/indic-tts-coqui-bn-gpu--t4',
-  mr : 'ai4bharat/indic-tts-coqui-mr-gpu--t4',
-  gu : 'ai4bharat/indic-tts-coqui-gu-gpu--t4',
-  pa : 'ai4bharat/indic-tts-coqui-pa-gpu--t4',
-  or : 'ai4bharat/indic-tts-coqui-or-gpu--t4',
-  as : 'ai4bharat/indic-tts-coqui-as-gpu--t4',
-  ur : 'ai4bharat/indic-tts-coqui-ur-gpu--t4',
-  mni: 'ai4bharat/indic-tts-coqui-mni-gpu--t4',
-  sat: 'ai4bharat/indic-tts-coqui-sat-gpu--t4',
-  en : 'ai4bharat/indic-tts-coqui-en-gpu--t4',
+const BHASHINI_TTS_SVC = {
+  ta:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  te:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  kn:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  ml:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  hi:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  mr:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  bn:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  gu:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  pa:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  or:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  ur:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  as:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  mni:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  sat:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
 };
 
-async function getBhashiniServiceId(langKey) {
-  if (_serviceIdCache[langKey]) return _serviceIdCache[langKey];
-
-  // Use hardcoded serviceId (avoids unreliable pipeline lookup)
-  const hardcoded = BHASHINI_SERVICE_IDS[langKey];
-  if (hardcoded) {
-    _serviceIdCache[langKey] = hardcoded;
-    console.log('✅ Bhashini serviceId ['+langKey+']:', hardcoded);
-    return hardcoded;
-  }
-
-  // Dynamic lookup fallback (tries both auth header styles)
-  const srcLang = LANG_META[langKey]?.bhashini || langKey;
-  const body = {
-    pipelineTasks: [{ taskType:'tts', config:{ language:{ sourceLanguage: srcLang } } }],
-    pipelineRequestConfig: { pipelineId:'64392f96daac500b55c543cd' }
-  };
-  try {
-    const res = await fetch(CONFIG.BHASHINI_SEARCH_URL, {
-      method : 'POST',
-      headers: {
-        'Content-Type' : 'application/json',
-        'userID'       : CONFIG.BHASHINI_USER_ID,
-        'ulcaApiKey'   : CONFIG.BHASHINI_API_KEY,
-        'Authorization': CONFIG.BHASHINI_API_KEY,
-      },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) throw new Error('Pipeline search HTTP ' + res.status);
-    const data = await res.json();
-    const ttsConfig = data?.pipelineResponseConfig?.find(c => c.taskType === 'tts');
-    const serviceId = ttsConfig?.config?.[0]?.serviceId;
-    if (!serviceId) throw new Error('No serviceId in pipeline response');
-    _serviceIdCache[langKey] = serviceId;
-    console.log('✅ Bhashini serviceId ['+langKey+'] (dynamic):', serviceId);
-    return serviceId;
-  } catch(e) {
-    console.error('getBhashiniServiceId error:', e.message);
-    return null;
-  }
-}
-
-/**
- * Call Bhashini Dhruva inference to synthesise speech.
- * Returns an ArrayBuffer (WAV audio bytes).
- */
-async function bhashiniTTS(text, langKey) {
-  const srcLang   = LANG_META[langKey]?.bhashini || langKey;
-  const serviceId = await getBhashiniServiceId(langKey);
-  if (!serviceId) throw new Error('No Bhashini serviceId for ' + langKey);
-
-  const body = {
-    pipelineTasks:[{
-      taskType:'tts',
-      config:{
-        language    :{ sourceLanguage: srcLang },
-        serviceId   : serviceId,
-        gender      :'male',
-        samplingRate: 8000
-      }
-    }],
-    inputData:{
-      input:[{ source: text }],
-      audio:[{ audioContent:'' }]
-    }
-  };
-
+async function bhashiniTTS(text, lang) {
+  if(lang==='en') throw new Error('English not supported by Bhashini');
   const res = await fetch(CONFIG.BHASHINI_INFER_URL, {
-    method :'POST',
-    headers:{
-      'Content-Type' :'application/json',
-      'Authorization': CONFIG.BHASHINI_API_KEY,
-    },
-    body: JSON.stringify(body)
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':CONFIG.BHASHINI_API_KEY},
+    body:JSON.stringify({
+      pipelineTasks:[{taskType:'tts',config:{
+        language:{sourceLanguage:LANG_META[lang]?.bhashini||lang},
+        serviceId:BHASHINI_TTS_SVC[lang]||BHASHINI_TTS_SVC['hi'],
+        gender:'male', samplingRate:8000
+      }}],
+      inputData:{input:[{source:text}],audio:[{audioContent:null}]}
+    })
   });
-  if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(`Bhashini TTS HTTP ${res.status}: ${msg}`);
-  }
-  const data    = await res.json();
-  const audioB64 = data?.pipelineResponse?.[0]?.audio?.[0]?.audioContent;
-  if (!audioB64) throw new Error('Bhashini returned no audio content');
-
-  // base64 → ArrayBuffer
-  const bin  = atob(audioB64);
-  const buf  = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  if(!res.ok) throw new Error('Bhashini HTTP '+res.status);
+  const data=await res.json();
+  const b64=data?.pipelineResponse?.[0]?.audio?.[0]?.audioContent||data?.audio?.[0]?.audioContent;
+  if(!b64) throw new Error('Bhashini: no audio in response');
+  const bin=atob(b64), buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
   return buf.buffer;
 }
 
-/**
- * Translate English GPT reply → target language using GPT-4o-mini.
- * Returns the original text unchanged if langKey === 'en' or if call fails.
- */
-async function translateText(text, langKey) {
-  if (langKey === 'en') return text;
-  const langName = LANG_META[langKey]?.name || langKey;
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method :'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+CONFIG.OPENAI_API_KEY },
-      body   : JSON.stringify({
-        model      :'gpt-4o-mini',
-        max_tokens : 200,
-        temperature: 0.1,
-        messages   :[
-          { role:'system', content:`Translate the following text to ${langName}. Return ONLY the translation, no explanation, no quotes.` },
-          { role:'user',   content: text }
-        ]
-      })
-    });
-    if (!res.ok) throw new Error('Translate HTTP ' + res.status);
-    const d = await res.json();
-    return d.choices[0].message.content.trim();
-  } catch(e) {
-    console.warn('Translation fallback (en):', e.message);
-    return text;
+function detectLangFromScript(text) {
+  if(!text||text.trim().length<2) return null;
+  const c={};
+  for(const ch of text){
+    const p=ch.codePointAt(0);
+    if(p>=0x0900&&p<=0x097F) c.hi=(c.hi||0)+1;
+    else if(p>=0x0980&&p<=0x09FF) c.bn=(c.bn||0)+1;
+    else if(p>=0x0A00&&p<=0x0A7F) c.pa=(c.pa||0)+1;
+    else if(p>=0x0A80&&p<=0x0AFF) c.gu=(c.gu||0)+1;
+    else if(p>=0x0B00&&p<=0x0B7F) c.or=(c.or||0)+1;
+    else if(p>=0x0B80&&p<=0x0BFF) c.ta=(c.ta||0)+1;
+    else if(p>=0x0C00&&p<=0x0C7F) c.te=(c.te||0)+1;
+    else if(p>=0x0C80&&p<=0x0CFF) c.kn=(c.kn||0)+1;
+    else if(p>=0x0D00&&p<=0x0D7F) c.ml=(c.ml||0)+1;
+    else if(p>=0x0600&&p<=0x06FF) c.ur=(c.ur||0)+1;
   }
+  if(!Object.keys(c).length) return null;
+  return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0];
 }
 
-/**
- * Auto-detect language of spoken transcript using GPT-4o-mini (fast, ~50ms).
- * Returns ISO 639-1 code string, or null on failure.
- */
-async function detectLang(text) {
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method :'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+CONFIG.OPENAI_API_KEY },
-      body   : JSON.stringify({
-        model      :'gpt-4o-mini',
-        max_tokens : 5,
-        temperature: 0,
-        messages   :[
-          { role:'system', content:'Detect the language of the text. Reply with ONLY the ISO 639-1 code (e.g. hi, ta, en, bn, te, kn, ml, gu, mr, pa, or, ur, as). Nothing else.' },
-          { role:'user',   content: text }
-        ]
-      })
+async function detectLangGPT(text) {
+  try{
+    const r=await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+CONFIG.OPENAI_API_KEY},
+      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:5,temperature:0,messages:[
+        {role:'system',content:'Detect language. Reply ONLY with the ISO 639-1 code: hi,ta,te,kn,ml,bn,mr,gu,pa,or,ur,as,en,mni,sat. Nothing else.'},
+        {role:'user',content:text}
+      ]})
     });
-    if (!res.ok) return null;
-    const d = await res.json();
-    const code = d.choices[0].message.content.trim().toLowerCase().replace(/[^a-z]/g,'');
-    return LANG_META[code] ? code : null;
-  } catch(e) {
-    console.warn('detectLang failed:', e.message);
+    if(!r.ok) return null;
+    const d=await r.json();
+    const code=d.choices[0].message.content.trim().toLowerCase().replace(/[^a-z]/g,'');
+    return LANG_META[code]?code:null;
+  }catch(e){return null;}
+}
+
+const STOCK_KW=['stock','share','price','nifty','sensex','market','invest','buy','sell','reliance','tcs','infosys','infy','hdfc','icici','sbi','wipro','bajaj','titan','maruti','ipo','trading','portfolio','dividend','pe ratio','market cap','bse','nse','banknifty','midcap','smallcap','bluechip','equity','mutual fund','should i','worth buying','good investment','recommend','nivesh','kharidna','bechna','sheyar','bazaar'];
+const STOCK_SYM={'reliance':'RELIANCE','tcs':'TCS','infosys':'INFY','infy':'INFY','hdfc':'HDFCBANK','hdfcbank':'HDFCBANK','icici':'ICICIBANK','sbi':'SBIN','wipro':'WIPRO','bajaj':'BAJFINANCE','titan':'TITAN','maruti':'MARUTI','airtel':'BHARTIARTL','kotak':'KOTAKBANK','axis':'AXISBANK','lt':'LT','itc':'ITC','asian paints':'ASIANPAINT','nifty':'nifty','sensex':'sensex','banknifty':'banknifty'};
+
+function isStockQ(q){return STOCK_KW.some(k=>q.toLowerCase().includes(k));}
+function stockSym(q){
+  const l=q.toLowerCase();
+  for(const[n,s] of Object.entries(STOCK_SYM)) if(l.includes(n)) return s;
+  const m=q.match(/\b([A-Z]{2,10})\b/); return m?m[1]:null;
+}
+async function fetchStock(sym){
+  try{
+    const[p,i]=await Promise.allSettled([
+      fetch(SERVER_URL+'/stock/price',   {method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({symbol:sym})}),
+      fetch(SERVER_URL+'/stock/insights',{method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({stock_name:sym.toLowerCase()})})
+    ]);
+    return{
+      priceData   :(p.status==='fulfilled'&&p.value.ok)?await p.value.json():null,
+      insightsData:(i.status==='fulfilled'&&i.value.ok)?await i.value.json():null
+    };
+  }catch(e){return{priceData:null,insightsData:null};}
+}
+function fmtStock(sym,pd,id){
+  const parts=[];
+  if(pd){
+    const chg=pd.change_percent!=null?` (${pd.change_percent>0?'+':''}${pd.change_percent}% today)`:'';
+    parts.push(`LIVE DATA for ${pd.company_name||sym}:\n• Price: Rs ${pd.current_price}${chg}\n`+(pd.day_high?`• Range: Rs ${pd.day_low}–${pd.day_high}\n`:'')+( pd.pe_ratio?`• P/E: ${pd.pe_ratio.toFixed(1)}\n`:'')+`• As of: ${new Date(pd.timestamp).toLocaleTimeString('en-IN')}`);
+  }
+  if(id){
+    parts.push(`ANALYST SIGNALS for ${id.stock_name}:\n• Signal: ${id.signal_label}\n• FMP rec: ${id.fmp_rec}\n• Agreement: ${id.agreement}\n\nGive a direct investment opinion in 1-2 sentences. Start with Yes/No/Hold.`);
+  }
+  return parts.length?parts.join('\n\n'):null;
+}
+
+// ★ RAG timeout: 8 s (server embedding can be slow on first call)
+async function ragContext(query){
+  try{
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),8000);
+    const r=await fetch(SERVER_URL+'/retrieve',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body:JSON.stringify({query,k:3,threshold:0.3}),
+      signal:ctrl.signal
+    });
+    clearTimeout(t);
+    if(!r.ok) return null;
+    const d=await r.json();
+    if(!d.results?.length) return null;
+    return d.results.map((x,i)=>`[${i+1}] ${x.excerpt} (Source: ${x.filename}, p.${x.page_num})`).join('\n');
+  }catch(e){
+    console.warn('RAG (non-fatal):',e.message);
     return null;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Stock keywords / symbols
-// ─────────────────────────────────────────────────────────────────────────────
-const STOCK_KEYWORDS = [
-  'stock','share','price','nifty','sensex','market','invest','buy','sell',
-  'reliance','tcs','infosys','infy','hdfc','icici','sbi','wipro','bajaj',
-  'titan','maruti','ipo','trading','portfolio','dividend','pe ratio',
-  'market cap','bse','nse','banknifty','midcap','smallcap','bluechip',
-  'equity','mutual fund','should i','worth buying','good investment','recommend',
-  // Hindi / Hinglish
-  'nivesh','kharidna','bechna','sheyar','bazaar','suchkank','senseks',
-];
-const STOCK_SYMBOL_MAP = {
-  'reliance':'RELIANCE','tcs':'TCS','infosys':'INFY','infy':'INFY',
-  'hdfc':'HDFCBANK','hdfcbank':'HDFCBANK','icici':'ICICIBANK','sbi':'SBIN',
-  'wipro':'WIPRO','bajaj':'BAJFINANCE','titan':'TITAN','maruti':'MARUTI',
-  'airtel':'BHARTIARTL','kotak':'KOTAKBANK','axis':'AXISBANK','lt':'LT',
-  'itc':'ITC','asian paints':'ASIANPAINT','nestleind':'NESTLEIND',
-  'nifty':'nifty','sensex':'sensex','banknifty':'banknifty',
-};
+// startAR stub — onclick may fire before load event
+let _arPending=false;
+window.startAR=function(){if(window._startAR)window._startAR();else _arPending=true;};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main app
-// ─────────────────────────────────────────────────────────────────────────────
-// ── startAR: defined globally so onclick fires even before 'load' ──
-// Uses a pending flag if app not ready yet.
-let _arPending = false;
-window.startAR = function() {
-  if (window._startAR) { window._startAR(); }
-  else { _arPending = true; }   // app not initialised yet — will fire once ready
-};
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('load',function(){
+  if(typeof AFRAME==='undefined'){document.getElementById('status-text').textContent='A-Frame failed';return;}
 
-window.addEventListener('load', function () {
-
-  if (typeof AFRAME === 'undefined') {
-    document.getElementById('status-text').textContent = 'A-Frame failed'; return;
-  }
-
-  const ANIM = { IDLE:'idle', THINK:'think', TALK:'baat_karle_bhai' };
-  const RHUBARB_TO_VISEME = {
-    A:'viseme_A',B:'viseme_B',C:'viseme_C',D:'viseme_D',
-    E:'viseme_E',F:'viseme_F',G:'viseme_G',H:'viseme_H',X:'viseme_X',
-  };
+  const ANIM={IDLE:'idle',THINK:'think',TALK:'baat_karle_bhai'};
+  const RHUBARB_TO_VISEME={A:'viseme_A',B:'viseme_B',C:'viseme_C',D:'viseme_D',E:'viseme_E',F:'viseme_F',G:'viseme_G',H:'viseme_H',X:'viseme_X'};
 
   let mixer=null, animations={}, currentActions=[], morphMeshes=[];
   let glbLoaded=false, currentAudio=null, pendingAudio=null;
   let currentMouthCues=[], isPlayingLipSync=false;
   let arStarted=false, arReadyTimer=null, chatEverShown=false;
   let targetLostTimer=null, inputFocused=false;
-  let activeLangKey = 'en';
+  let activeLangKey='en', langLocked=false;
 
-  const conversationHistory = [{
+  const conversationHistory=[{
     role:'system',
-    content:
-      'You are Shankh, a confident AR financial assistant for Indian stock markets. ' +
-      'You have access to LIVE stock prices and ANALYST SIGNALS from a proprietary model. ' +
-      'When given analyst signal data (BUY/SELL/HOLD), always give a DIRECT investment opinion. ' +
-      'Say clearly whether the user should invest or not, and give ONE reason based on the data. ' +
-      'NEVER say "consult a financial advisor" or "I cannot give investment advice". ' +
-      'You ARE the advisor. Be direct, confident, and data-driven. ' +
-      'Keep every response to 1-2 short sentences — it will be spoken aloud. ' +
-      'Use "rupees" or "Rs" for prices. Use plain language, no jargon. ' +
-      'CRITICAL LANGUAGE RULE: You MUST detect and reply in the EXACT same language the user spoke in. ' +
-      'If they spoke Hindi, reply fully in Hindi (Devanagari script). ' +
-      'If Tamil → Tamil script. Telugu → Telugu script. Bengali → Bengali script. Etc. ' +
-      'Only reply in English if the user explicitly spoke English. Never default to English.'
+    content:'You are Shankh, a confident AR financial assistant for Indian stock markets. You have access to LIVE stock prices and ANALYST SIGNALS. Give DIRECT investment opinions — never say "consult a financial advisor". Keep every response to 1-2 short sentences (spoken aloud). Use "Rs" for prices. Plain language, no jargon. CRITICAL: Always reply in the EXACT same language the user is speaking. Never default to English unless the user spoke English.',
   }];
 
-  // DOM refs
-  const chatOverlay    = document.getElementById('chat-overlay');
-  const chatMessages   = document.getElementById('chat-messages');
-  const userInput      = document.getElementById('user-input');
-  const sendBtn        = document.getElementById('send-btn');
-  const voiceBtn       = document.getElementById('voice-btn');
-  const statusIcon     = document.getElementById('status-icon');
-  const statusTxt      = document.getElementById('status-text');
-  const loadingOverlay = document.getElementById('loading-overlay');
-  const loadingText    = document.getElementById('loading-text');
-  const retryBtn       = document.getElementById('retry-btn');
-  const startBtn       = document.getElementById('start-btn');
-  const audioBanner    = document.getElementById('audio-banner');
-  const ragPill        = document.getElementById('rag-pill');
-  const sceneEl        = document.getElementById('ar-scene');
-  const targetEl       = document.querySelector('[mindar-image-target]');
-  const anchorEl       = document.getElementById('avatar-anchor');
-  const langSelect     = document.getElementById('lang-select');
-  const langFlag       = document.getElementById('lang-flag');
-  const langPill       = document.getElementById('lang-pill');
-  const langPillText   = document.getElementById('lang-pill-text');
+  const chatOverlay   = document.getElementById('chat-overlay');
+  const chatMessages  = document.getElementById('chat-messages');
+  const userInput     = document.getElementById('user-input');
+  const sendBtn       = document.getElementById('send-btn');
+  const voiceBtn      = document.getElementById('voice-btn');
+  const statusDot     = document.getElementById('status-dot');
+  const statusTxt     = document.getElementById('status-text');
+  const loadingOverlay= document.getElementById('loading-overlay');
+  const loadingText   = document.getElementById('loading-text');
+  const retryBtn      = document.getElementById('retry-btn');
+  const startBtn      = document.getElementById('start-btn');
+  const audioBanner   = document.getElementById('audio-banner');
+  const ragPill       = document.getElementById('rag-pill');
+  const langSelect    = document.getElementById('lang-select');
+  const langFlag      = document.getElementById('lang-flag');
+  const langPill      = document.getElementById('lang-pill');
+  const langPillText  = document.getElementById('lang-pill-text');
+  const sceneEl       = document.getElementById('ar-scene');
+  const targetEl      = document.querySelector('[mindar-image-target]');
+  const anchorEl      = document.getElementById('avatar-anchor');
 
-  // ── Language UI ──────────────────────────────────────────────────────────
-  function setActiveLang(key, showPill) {
-    if (!LANG_META[key]) return;
-    activeLangKey      = key;
-    langSelect.value   = key;
-    const opt          = langSelect.querySelector(`option[value="${key}"]`);
-    langFlag.textContent = opt?.dataset?.flag || '🌐';
-    if (showPill) {
-      langPillText.textContent = LANG_META[key].name;
-      langPill.classList.add('visible');
-      setTimeout(() => langPill.classList.remove('visible'), 3500);
-    }
-    // Pre-warm Bhashini serviceId lookup in background
-    if (key !== 'en') getBhashiniServiceId(key).catch(()=>{});
-    console.log(`🌐 Language → ${key} (${LANG_META[key].name})`);
+  userInput.addEventListener('focus',()=>{inputFocused=true;});
+  userInput.addEventListener('blur', ()=>{inputFocused=false;});
+
+  function setStatus(dot,text){
+    statusDot.className='';
+    if(dot==='warn') statusDot.classList.add('warn');
+    else if(dot==='err') statusDot.classList.add('err');
+    statusTxt.textContent=text;
   }
-
-  langSelect.addEventListener('change', () => setActiveLang(langSelect.value, true));
-
-  // ── Input guards ─────────────────────────────────────────────────────────
-  userInput.addEventListener('focus', () => { inputFocused = true;  });
-  userInput.addEventListener('blur',  () => { inputFocused = false; });
-
-  function setStatus(icon, text) { statusIcon.textContent=icon; statusTxt.textContent=text; }
-
-  function addMessage(text, type, source) {
-    const d = document.createElement('div');
-    d.className = 'message '+(type||'bot')+'-message';
-    d.textContent = text;
-    chatMessages.appendChild(d);
-    if (source) {
-      const s = document.createElement('div');
-      s.className = 'rag-indicator';
-      s.textContent = '  via '+source;
-      chatMessages.appendChild(s);
-    }
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-
-  function showChat() { chatEverShown=true; chatOverlay.classList.add('active'); }
-  function hideChat() {
-    if (!chatEverShown||inputFocused||isPlayingLipSync||sendBtn.disabled) return;
+  function showChat(){chatEverShown=true;chatOverlay.classList.add('active');}
+  function hideChat(force=false){
+    if(!force&&(!chatEverShown||inputFocused||isPlayingLipSync||sendBtn.disabled))return;
     chatOverlay.classList.remove('active');
   }
+  function setLang(key,toast){
+    if(!LANG_META[key])return;
+    activeLangKey=key;
+    if(langSelect){langSelect.value=key;const o=langSelect.querySelector(`option[value="${key}"]`);if(langFlag)langFlag.textContent=o?.dataset?.flag||'🌐';}
+    if(toast){langPillText.textContent=LANG_META[key].name;langPill.classList.add('visible');setTimeout(()=>langPill.classList.remove('visible'),3500);}
+  }
+  if(langSelect) langSelect.addEventListener('change',()=>{langLocked=true;setLang(langSelect.value,true);});
 
-  window.unlockAndPlay = function() {
-    audioBanner.classList.remove('visible');
-    if (pendingAudio) { pendingAudio.play().catch(e=>console.error(e)); pendingAudio=null; }
-  };
-
-  // ── Stock helpers ─────────────────────────────────────────────────────────
-  function detectStockQuery(q) { return STOCK_KEYWORDS.some(k=>q.toLowerCase().includes(k)); }
-  function extractStockSymbol(q) {
-    const ql = q.toLowerCase();
-    for (const [name,sym] of Object.entries(STOCK_SYMBOL_MAP)) if (ql.includes(name)) return sym;
-    const m = q.match(/\b([A-Z]{2,10})\b/); return m ? m[1] : null;
-  }
-  async function fetchStockData(symbol) {
-    try {
-      const [pR,iR] = await Promise.allSettled([
-        fetch(SERVER_URL+'/stock/price',    {method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({symbol})}),
-        fetch(SERVER_URL+'/stock/insights', {method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({stock_name:symbol.toLowerCase()})})
-      ]);
-      const priceData    = (pR.status==='fulfilled'&&pR.value.ok) ? await pR.value.json() : null;
-      const insightsData = (iR.status==='fulfilled'&&iR.value.ok) ? await iR.value.json() : null;
-      return { priceData, insightsData };
-    } catch(e) { console.warn('Stock fetch failed:',e.message); return {priceData:null,insightsData:null}; }
-  }
-  function formatStockContext(symbol, priceData, insightsData) {
-    const parts=[];
-    if (priceData) {
-      const change = priceData.change_percent!=null ? ` (${priceData.change_percent>0?'+':''}${priceData.change_percent}% today)` : '';
-      parts.push(
-        `LIVE MARKET DATA for ${priceData.company_name||symbol}:\n`+
-        `• Current price: Rs ${priceData.current_price}${change}\n`+
-        (priceData.day_high ? `• Day range: Rs ${priceData.day_low} – Rs ${priceData.day_high}\n` : '')+
-        (priceData.pe_ratio ? `• P/E ratio: ${priceData.pe_ratio.toFixed(1)}\n` : '')+
-        (priceData.volume   ? `• Volume: ${Number(priceData.volume).toLocaleString('en-IN')}\n` : '')+
-        `• Data as of: ${new Date(priceData.timestamp).toLocaleTimeString('en-IN')}`
-      );
-    }
-    if (insightsData) {
-      parts.push(
-        `ANALYST SIGNALS for ${insightsData.stock_name} (${insightsData.ticker}):\n`+
-        `• Our model signal: ${insightsData.signal_label}\n`+
-        `• FMP analyst rec : ${insightsData.fmp_rec}\n`+
-        `• Agreement       : ${insightsData.agreement}\n`+
-        `• Data date       : ${insightsData.date}\n\n`+
-        `Give a direct investment opinion in 1-2 sentences. Start with "Yes," or "No," or "Hold off".`
-      );
-    } else if (priceData) {
-      parts.push(`No analyst signal for ${symbol}. Give a brief observation based on the price.`);
-    }
-    return parts.length ? parts.join('\n\n') : null;
-  }
-  async function retrieveContext(query) {
-    try {
-      const ctrl = new AbortController();
-      const t    = setTimeout(()=>ctrl.abort(),2000);
-      const res  = await fetch(SERVER_URL+'/retrieve',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
-        body:JSON.stringify({query,k:3,threshold:0.3}),
-        signal:ctrl.signal
-      });
-      clearTimeout(t);
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (!data.results?.length) return null;
-      return data.results.map((r,i)=>`[${i+1}] ${r.excerpt} (Source: ${r.filename}, p.${r.page_num})`).join('\n');
-    } catch(e) { if(e.name!=='AbortError') console.warn('RAG failed:',e.message); return null; }
+  let typingEl=null;
+  function showTyping(){if(typingEl)return;typingEl=document.createElement('div');typingEl.className='typing-dots';typingEl.innerHTML='<span></span><span></span><span></span>';chatMessages.appendChild(typingEl);chatMessages.scrollTop=chatMessages.scrollHeight;}
+  function hideTyping(){if(typingEl){typingEl.remove();typingEl=null;}}
+  function addMsg(text,type,src){
+    hideTyping();
+    const d=document.createElement('div');d.className='message '+(type||'bot')+'-message';d.textContent=text;chatMessages.appendChild(d);
+    if(src){const s=document.createElement('div');s.className='rag-indicator';s.textContent='via '+src;chatMessages.appendChild(s);}
+    chatMessages.scrollTop=chatMessages.scrollHeight;
   }
 
-  // ── Core: send message ────────────────────────────────────────────────────
-  async function sendMessage(message) {
-    message = message.trim(); if (!message) return;
-    addMessage(message,'user'); userInput.value=''; sendBtn.disabled=true;
-    playAnim(ANIM.THINK); setStatus('📊','Fetching data...');
-    try {
-      const isStockQuery = detectStockQuery(message);
-      const stockSymbol  = isStockQuery ? extractStockSymbol(message) : null;
-      const [ragCtx, stockResult] = await Promise.all([
-        retrieveContext(message),
-        stockSymbol ? fetchStockData(stockSymbol) : Promise.resolve(null)
-      ]);
-      const contextParts=[]; let sourceLabel=null;
-      if (ragCtx) { contextParts.push('RELEVANT KNOWLEDGE BASE:\n'+ragCtx); sourceLabel='📚 KB'; }
-      if (stockResult?.priceData || stockResult?.insightsData) {
-        const ctx = formatStockContext(stockSymbol,stockResult.priceData,stockResult.insightsData);
-        if (ctx) {
-          contextParts.push(ctx);
-          sourceLabel = sourceLabel ? '📚 KB + 📊 Live'
-            : stockResult.insightsData ? `📊 ${stockResult.insightsData.signal_label}` : '📊 Live';
-        }
+  window.unlockAndPlay=function(){audioBanner.classList.remove('visible');if(pendingAudio){pendingAudio.play().catch(console.error);pendingAudio=null;}};
+
+  // ── Send message ─────────────────────────────────────────────────────────
+  async function sendMessage(msg){
+    msg=msg.trim();if(!msg)return;
+    addMsg(msg,'user'); userInput.value=''; sendBtn.disabled=true;
+    showTyping(); playAnim(ANIM.THINK);
+    try{
+      // Language detection
+      if(!langLocked){
+        setStatus('','Detecting language…');
+        const det=await detectLangGPT(msg);
+        if(det){langLocked=true;setLang(det,true);}
       }
-      if (contextParts.length) { ragPill.classList.add('visible'); setTimeout(()=>ragPill.classList.remove('visible'),3000); }
+      const rLang=activeLangKey, rName=LANG_META[rLang]?.name||'English';
 
-      // ── Detect language BEFORE calling GPT so reply is in correct lang ──
-      setStatus('🔍','Detecting language...');
-      const detectedLang = await detectLang(message);
-      if (detectedLang && detectedLang !== activeLangKey) {
-        setActiveLang(detectedLang, true);
+      // Fetch RAG + stock in parallel
+      setStatus('warn','Fetching data…');
+      const sym=isStockQ(msg)?stockSym(msg):null;
+      const[rag,stock]=await Promise.all([ragContext(msg),sym?fetchStock(sym):Promise.resolve(null)]);
+
+      const ctx=[]; let srcLabel=null;
+      if(rag){ctx.push('KNOWLEDGE BASE:\n'+rag);srcLabel='📚 KB';}
+      if(stock?.priceData||stock?.insightsData){
+        const sc=fmtStock(sym,stock.priceData,stock.insightsData);
+        if(sc){ctx.push(sc);srcLabel=srcLabel?'📚 KB + 📊 Live':stock.insightsData?'📊 '+stock.insightsData.signal_label:'📊 Live';}
       }
-      const replyLang     = activeLangKey;
-      const replyLangName = LANG_META[replyLang]?.name || 'English';
+      if(ctx.length){ragPill.classList.add('visible');setTimeout(()=>ragPill.classList.remove('visible'),3000);}
 
-      // Per-turn language instruction — overrides everything
-      const langForceMsg = {
-        role:'system',
-        content:`The user is speaking ${replyLangName}. You MUST reply ONLY in ${replyLangName}. ` +
-                `Use the native script for ${replyLangName}. Do NOT use English in your reply.`
-      };
+      // GPT reply in detected language
+      setStatus('','Getting answer…');
+      const msgs=[...conversationHistory,
+        {role:'system',content:`Reply ONLY in ${rName} using its native script. Do NOT use English.`}
+      ];
+      if(ctx.length) msgs.push({role:'system',content:'Use this data:\n\n'+ctx.join('\n\n---\n\n')});
+      msgs.push({role:'user',content:msg});
 
-      const msgs = [...conversationHistory, langForceMsg];
-      if (contextParts.length)
-        msgs.push({role:'system',content:'Use the following data:\n\n'+contextParts.join('\n\n---\n\n')});
-      msgs.push({role:'user',content:message});
-
-      setStatus('💭','Getting answer...');
-      const res = await fetch('https://api.openai.com/v1/chat/completions',{
+      const gr=await fetch('https://api.openai.com/v1/chat/completions',{
         method:'POST',
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+CONFIG.OPENAI_API_KEY},
         body:JSON.stringify({model:CONFIG.MODEL,messages:msgs,max_tokens:180,temperature:0.7})
       });
-      if (!res.ok) throw new Error('OpenAI '+res.status);
-      const reply = (await res.json()).choices[0].message.content;
-      conversationHistory.push({role:'user',content:message},{role:'assistant',content:reply});
-      addMessage(reply,'bot',sourceLabel);
+      if(!gr.ok) throw new Error('OpenAI '+gr.status);
+      const reply=(await gr.json()).choices[0].message.content.trim();
 
-      // Speak directly via Bhashini TTS — no translation needed, GPT already replied in target lang
-      await speakBhashini(reply, replyLang);
-
-    } catch(err) {
-      console.error('sendMessage:', err);
-      addMessage('Error: '+err.message,'bot');
-      playAnim(ANIM.IDLE);
-    } finally { sendBtn.disabled=false; }
-  }
-
-  // ── Bhashini TTS pipeline ─────────────────────────────────────────────────
-  /**
-   * Full flow:
-   *  1. Translate English reply → activeLangKey (GPT-4o-mini)
-   *  2. Fetch Bhashini TTS audio + Rhubarb mouth cues in parallel
-   *  3. Play audio with lip-sync
-   *  4. On any Bhashini failure → fall back to original Rhubarb/OpenAI TTS
-   */
-  async function speakBhashini(nativeText, langKey) {
-    // GPT already replied in the target language — feed directly to Bhashini TTS
-    const spokenText = nativeText;
-    setStatus('🎙️',`Generating speech (Bhashini · ${LANG_META[langKey]?.name})...`);
-
-    try {
-      // Run audio synthesis + mouth-cue fetch in parallel for speed
-      const [audioRes, cuesRes] = await Promise.allSettled([
-        bhashiniTTS(spokenText, langKey),
-        fetchRhubarbCues(spokenText)    // cues from spoken text (phoneme timing)
-      ]);
-
-      currentMouthCues = (cuesRes.status==='fulfilled' && cuesRes.value) ? cuesRes.value : [];
-
-      if (audioRes.status === 'rejected') throw audioRes.reason;
-
-      const blob  = new Blob([audioRes.value], { type:'audio/wav' });
-      const url   = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.preload = 'auto';
-      currentAudio  = audio;
-
-      audio.addEventListener('playing', () => {
-        isPlayingLipSync = true;
-        audioBanner.classList.remove('visible');
-        setStatus('💬',`Speaking (${LANG_META[langKey]?.name})...`);
-        playAnim(ANIM.TALK);
-        animateMouth();
-      });
-      audio.addEventListener('ended', () => {
-        isPlayingLipSync=false; currentAudio=null; pendingAudio=null;
-        resetMouth(); playAnim(ANIM.IDLE);
-        setStatus('✅','Ready to chat');
-        URL.revokeObjectURL(url);
-      });
-      audio.addEventListener('error', () => {
-        isPlayingLipSync=false; pendingAudio=null;
-        resetMouth(); playAnim(ANIM.IDLE);
-        setStatus('❌','Audio error');
-        URL.revokeObjectURL(url);
-      });
-
-      const p = audio.play();
-      if (p!==undefined) p.catch(e=>{
-        if (e.name==='NotAllowedError') {
-          pendingAudio = audio;
-          audioBanner.classList.add('visible');
-          setStatus('👆','Tap banner to hear response');
-        } else {
-          setStatus('❌','Playback: '+e.message);
-        }
-      });
-
-    } catch(err) {
-      // Bhashini unavailable — fall back gracefully to OpenAI TTS + Rhubarb
-      console.warn('Bhashini TTS failed, using fallback TTS:', err.message);
-      setStatus('⚠️','Bhashini unavailable — using fallback TTS');
-      await speakRhubarbFallback(spokenText);
+      conversationHistory.push({role:'user',content:msg},{role:'assistant',content:reply});
+      addMsg(reply,'bot',srcLabel);
+      await speakBhashini(reply,rLang);
+    }catch(err){
+      console.error('sendMessage:',err);
+      hideTyping(); addMsg('Error: '+err.message,'bot'); playAnim(ANIM.IDLE);
+    }finally{
+      sendBtn.disabled=false;
     }
   }
 
-  // Fetch only Rhubarb mouth cues (no audio) for lip-sync timing
-  async function fetchRhubarbCues(text) {
-    try {
-      const res = await fetch(SERVER_URL+'/generate_lipsync',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
-        body:JSON.stringify({text, api_key:CONFIG.OPENAI_API_KEY, cues_only:true})
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.lipsync?.mouthCues || null;
-    } catch(e) { return null; }
-  }
-
-  // Original OpenAI TTS + Rhubarb fallback (kept 100% intact)
-  async function speakRhubarbFallback(text) {
-    try {
-      setStatus('🎙️','Generating speech...');
-      const res = await fetch(SERVER_URL+'/generate_lipsync',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
-        body:JSON.stringify({text,api_key:CONFIG.OPENAI_API_KEY})
-      });
-      if (!res.ok) throw new Error('Rhubarb '+res.status);
-      const data = await res.json();
-      currentMouthCues = data.lipsync.mouthCues;
-      const audio = new Audio(SERVER_URL+data.audio_url);
-      audio.preload='auto'; currentAudio=audio;
-      audio.addEventListener('playing',()=>{ isPlayingLipSync=true; audioBanner.classList.remove('visible'); setStatus('💬','Speaking...'); playAnim(ANIM.TALK); animateMouth(); });
-      audio.addEventListener('ended',()=>{ isPlayingLipSync=false; currentAudio=null; pendingAudio=null; resetMouth(); playAnim(ANIM.IDLE); setStatus('✅','Ready to chat'); });
-      audio.addEventListener('error',()=>{ isPlayingLipSync=false; pendingAudio=null; resetMouth(); playAnim(ANIM.IDLE); setStatus('❌','Audio error'); });
-      const p=audio.play();
-      if (p!==undefined) p.catch(e=>{ if(e.name==='NotAllowedError'){ pendingAudio=audio; audioBanner.classList.add('visible'); setStatus('👆','Tap banner'); } });
-    } catch(err) { console.error('Rhubarb fallback:', err); setStatus('❌','Speech error'); playAnim(ANIM.IDLE); }
-  }
-
-  // ── Avatar (unchanged) ────────────────────────────────────────────────────
-  function loadAvatar() {
-    if (glbLoaded) return;
-    // Wait for ES module loaders to be ready (they load async)
-    if (!window._loadersReady) {
-      console.log('⏳ Waiting for loaders...');
-      setTimeout(loadAvatar, 150);
+  // ── TTS ──────────────────────────────────────────────────────────────────
+  async function speakBhashini(text,lang){
+    if(lang==='en'){
+      setStatus('','Speaking…');
+      await speakRhubarb(text).catch(()=>browserTTS(text,'en-IN'));
       return;
     }
-    glbLoaded = true;
-    setStatus('⏳','Loading avatar...');
+    setStatus('','Generating speech (Bhashini · '+LANG_META[lang]?.name+')…');
+    try{
+      const buf=await bhashiniTTS(text,lang);
+      const url=URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+      currentMouthCues=[];
+      await playAudio(url,true,lang);
+    }catch(err){
+      console.warn('Bhashini failed:',err.message,'→ fallback');
+      setStatus('warn','Using fallback TTS');
+      await speakRhubarb(text).catch(()=>browserTTS(text,LANG_META[lang]?.browserLang||'en-IN'));
+    }
+  }
 
-    // AFRAME.THREE for all scene objects; ES-module loaders bridged via window._GLTFLoader etc.
-    const THREE      = AFRAME.THREE;
-    const GLTFLoader  = window._GLTFLoader;
-    const DRACOLoader = window._DRACOLoader;
+  async function speakRhubarb(text){
+    const r=await fetch(SERVER_URL+'/generate_lipsync',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body:JSON.stringify({text})
+    });
+    if(!r.ok) throw new Error('Rhubarb '+r.status);
+    const d=await r.json();
+    currentMouthCues=d.lipsync?.mouthCues||[];
+    await playAudio(SERVER_URL+d.audio_url,false,'en');
+  }
 
-    console.log('🎭 loadAvatar — THREE r'+THREE.REVISION+' | GLTFLoader:'+!!GLTFLoader);
+  function browserTTS(text,lang){
+    const u=new SpeechSynthesisUtterance(text); u.lang=lang;
+    u.onstart=()=>{isPlayingLipSync=true;playAnim(ANIM.TALK);setStatus('','Speaking…');};
+    u.onend  =()=>{isPlayingLipSync=false;resetMouth();playAnim(ANIM.IDLE);setStatus('','Ready to chat');};
+    window.speechSynthesis.speak(u);
+  }
 
-    const smoothGroup = new THREE.Group();
-    sceneEl.object3D.add(smoothGroup);
-    smoothGroup.visible = false;
-    window._smoothGroup = smoothGroup;
+  function genRhythmicCues(dur){
+    const c=[],r=0.12;let t=0;
+    while(t<dur){c.push({start:t,end:t+r*0.7,value:'A'});c.push({start:t+r*0.7,end:t+r,value:'X'});t+=r;}
+    return c;
+  }
 
-    const draco = new DRACOLoader();
+  async function playAudio(url,isBlob,lang){
+    return new Promise(res=>{
+      const a=new Audio(url); a.preload='auto'; currentAudio=a;
+      a.addEventListener('loadedmetadata',()=>{
+        if(isBlob&&!currentMouthCues.length) currentMouthCues=genRhythmicCues(a.duration);
+      });
+      a.addEventListener('playing',()=>{
+        isPlayingLipSync=true; audioBanner.classList.remove('visible');
+        setStatus('','Speaking in '+LANG_META[lang]?.name+'…');
+        playAnim(ANIM.TALK); animateMouth();
+      });
+      a.addEventListener('ended',()=>{
+        isPlayingLipSync=false; currentAudio=null; pendingAudio=null;
+        resetMouth(); playAnim(ANIM.IDLE); setStatus('','Ready to chat');
+        if(isBlob) URL.revokeObjectURL(url); res();
+      });
+      a.addEventListener('error',()=>{
+        isPlayingLipSync=false; resetMouth(); playAnim(ANIM.IDLE); setStatus('err','Audio error');
+        if(isBlob) URL.revokeObjectURL(url); res();
+      });
+      const p=a.play();
+      if(p) p.catch(e=>{
+        if(e.name==='NotAllowedError'){pendingAudio=a;audioBanner.classList.add('visible');setStatus('warn','Tap banner to hear');}
+        else{setStatus('err',e.message);res();}
+      });
+    });
+  }
+
+  // ── Avatar loading ────────────────────────────────────────────────────────
+  // ★ KEY FIX: model is added directly to anchorEl.object3D (the MindAR entity).
+  //   MindAR moves anchorEl automatically when the marker is tracked —
+  //   no manual world-space decomposition needed, avatar always follows marker.
+  function loadAvatar(){
+    if(glbLoaded)return;
+    if(!window._loadersReady){setTimeout(loadAvatar,150);return;}
+    glbLoaded=true;
+    setStatus('','Loading avatar…');
+
+    const THREE     =AFRAME.THREE;
+    const GLTFLoader =window._GLTFLoader;
+    const DRACOLoader=window._DRACOLoader;
+
+    const draco=new DRACOLoader();
     draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
     draco.preload();
-    const loader = new GLTFLoader();
+    const loader=new GLTFLoader();
     loader.setDRACOLoader(draco);
+
     loader.load('avatar_hq.glb',
-      (gltf) => {
-        const model = gltf.scene;
-        if (gltf.animations?.length) {
-          mixer = new THREE.AnimationMixer(model);
+      gltf=>{
+        const model=gltf.scene;
+
+        // Animations
+        if(gltf.animations?.length){
+          mixer=new THREE.AnimationMixer(model);
           gltf.animations.forEach(clip=>{
             const clean=new THREE.AnimationClip(clip.name,clip.duration,
               clip.tracks.filter(t=>!t.name.toLowerCase().includes('viseme')));
-            if (clean.tracks.length) animations[clip.name]=mixer.clipAction(clean);
+            if(clean.tracks.length) animations[clip.name]=mixer.clipAction(clean);
           });
         }
+
+        // Morph targets for lip sync
         model.traverse(child=>{
-          if(!child.isMesh||!child.morphTargetDictionary) return;
-          if(Object.keys(child.morphTargetDictionary).some(k=>k.startsWith('viseme_'))) morphMeshes.push(child);
+          if(!child.isMesh||!child.morphTargetDictionary)return;
+          if(Object.keys(child.morphTargetDictionary).some(k=>k.startsWith('viseme_')))
+            morphMeshes.push(child);
         });
-        smoothGroup.add(model);
-        const clock=new THREE.Clock(), tPos=new THREE.Vector3(), tQuat=new THREE.Quaternion(), tScale=new THREE.Vector3();
-        const LERP=0.15; let snapReady=false;
+
+        // Orient upright on marker (MindAR marker plane = XZ, model is Y-up)
+        model.rotation.set(Math.PI/2, 0, 0);   // +90° on X axis
+        model.scale.set(2, 2, 2);               // uniform scale 2,2,2
+        model.position.set(0, 0, 0.05);
+
+        // ★ Parent directly to the MindAR anchor entity —
+        //   it auto-follows the marker, no manual tracking loop needed
+        anchorEl.object3D.add(model);
+
+        // Animation mixer update loop
+        const clock=new THREE.Clock();
         (function loop(){
           requestAnimationFrame(loop);
           if(mixer) mixer.update(clock.getDelta());
-          if(anchorEl.object3D.visible){
-            anchorEl.object3D.updateWorldMatrix(true,false);
-            anchorEl.object3D.matrixWorld.decompose(tPos,tQuat,tScale);
-            smoothGroup.visible=true;
-            if(!snapReady){ smoothGroup.position.copy(tPos); smoothGroup.quaternion.copy(tQuat); smoothGroup.scale.copy(tScale); snapReady=true; }
-            else{ smoothGroup.position.lerp(tPos,LERP); smoothGroup.quaternion.slerp(tQuat,LERP); smoothGroup.scale.lerp(tScale,LERP); }
-          } else { snapReady=false; }
         })();
-        setStatus('🎯','Point camera at your marker');
+
+        setStatus('','Point camera at your marker');
         playAnim(ANIM.IDLE);
+        console.log('✅ Avatar loaded and parented to anchor');
       },
-      p=>{ if(p.total) setStatus('⏳','Avatar '+Math.round(p.loaded/p.total*100)+'%'); },
-      err=>{ console.error('GLB:',err); setStatus('❌','Avatar failed'); }
+      p=>{if(p.total)setStatus('','Avatar '+Math.round(p.loaded/p.total*100)+'%');},
+      err=>{console.error('GLB error:',err);setStatus('err','Avatar failed to load');}
     );
   }
-  function playAnim(name,loop){
-    if(loop===undefined) loop=true; if(!mixer) return;
-    const key=Object.keys(animations).find(k=>k.toLowerCase()===name.toLowerCase()); if(!key) return;
+
+  function playAnim(name,loop=true){
+    if(!mixer)return;
+    const k=Object.keys(animations).find(k=>k.toLowerCase()===name.toLowerCase());
+    if(!k)return;
     currentActions.forEach(a=>a.fadeOut(0.3)); currentActions=[];
-    const action=animations[key]; action.reset();
-    action.setLoop(loop?AFRAME.THREE.LoopRepeat:AFRAME.THREE.LoopOnce,Infinity);
-    action.clampWhenFinished=!loop; action.fadeIn(0.3).play(); currentActions.push(action);
+    const a=animations[k]; a.reset();
+    a.setLoop(loop?AFRAME.THREE.LoopRepeat:AFRAME.THREE.LoopOnce,Infinity);
+    a.clampWhenFinished=!loop; a.fadeIn(0.3).play(); currentActions.push(a);
   }
   function setViseme(name,intensity){
-    morphMeshes.forEach(mesh=>{
-      const d=mesh.morphTargetDictionary;
-      Object.keys(d).forEach(k=>{ if(k.startsWith('viseme_')) mesh.morphTargetInfluences[d[k]]=0; });
-      if(name&&d[name]!==undefined) mesh.morphTargetInfluences[d[name]]=intensity;
+    morphMeshes.forEach(m=>{
+      const d=m.morphTargetDictionary;
+      Object.keys(d).forEach(k=>{if(k.startsWith('viseme_'))m.morphTargetInfluences[d[k]]=0;});
+      if(name&&d[name]!==undefined)m.morphTargetInfluences[d[name]]=intensity;
     });
   }
-  function resetMouth(){ setViseme(null,0); }
+  function resetMouth(){setViseme(null,0);}
   function animateMouth(){
-    if(!isPlayingLipSync||!currentAudio) return;
+    if(!isPlayingLipSync||!currentAudio)return;
     const t=currentAudio.currentTime;
     const cue=currentMouthCues.find(c=>t>=c.start&&t<c.end);
-    setViseme(cue?RHUBARB_TO_VISEME[cue.value]:null,cue?0.85:0);
+    setViseme(cue?(RHUBARB_TO_VISEME[cue.value]||cue.value):null,cue?0.85:0);
     requestAnimationFrame(animateMouth);
   }
 
-  // ── AR events ─────────────────────────────────────────────────────────────
+  // ── Voice input ──────────────────────────────────────────────────────────
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(SR){
+    const rec=new SR(); rec.continuous=false; rec.interimResults=false;
+    rec.onresult=async e=>{
+      const tx=e.results[0][0].transcript.trim();
+      voiceBtn.classList.remove('listening'); userInput.value=tx;
+      const sl=detectLangFromScript(tx);
+      if(sl&&sl!==activeLangKey) setLang(sl,true);
+      else{const dl=await detectLangGPT(tx);if(dl&&dl!==activeLangKey)setLang(dl,true);}
+      await sendMessage(tx);
+    };
+    rec.onerror=e=>{voiceBtn.classList.remove('listening');setStatus('err','Voice: '+e.error);};
+    rec.onend  =()=>voiceBtn.classList.remove('listening');
+    voiceBtn.addEventListener('click',()=>{
+      rec.lang=LANG_META[activeLangKey]?.browserLang||'hi-IN';
+      try{rec.start();voiceBtn.classList.add('listening');setStatus('','Listening ('+LANG_META[activeLangKey].name+')…');}
+      catch(e){rec.stop();voiceBtn.classList.remove('listening');}
+    });
+  }else{
+    voiceBtn.disabled=true; voiceBtn.title='Voice not supported — use Chrome';
+  }
+
+  // ── AR events ────────────────────────────────────────────────────────────
   sceneEl.addEventListener('arReady',()=>{
-    clearTimeout(arReadyTimer); loadingOverlay.classList.remove('active');
-    // Small delay ensures A-Frame scene is fully initialised before loading GLB
-    setTimeout(() => loadAvatar(), 100);
-    setStatus('🎯','Point camera at your marker');
-  });
-  sceneEl.addEventListener('arError',()=>{
-    clearTimeout(arReadyTimer); loadingText.textContent='Camera error — tap Retry';
-    retryBtn.style.display='block'; setStatus('❌','AR error');
-  });
-  targetEl.addEventListener('targetFound',()=>{
-    if(targetLostTimer){ clearTimeout(targetLostTimer); targetLostTimer=null; }
-    setTimeout(() => loadAvatar(), 50); loadingOverlay.classList.remove('active'); showChat();
-    anchorEl.object3D.visible=true;
-    if(window._smoothGroup) window._smoothGroup.visible=true;
-    setStatus('✅','Shankh is here! Ask anything');
-    playAnim(ANIM.IDLE);
-  });
-  targetEl.addEventListener('targetLost',()=>{
-    targetLostTimer=setTimeout(()=>{
-      anchorEl.object3D.visible=false;
-      if(window._smoothGroup) window._smoothGroup.visible=false;
-      hideChat(); setStatus('🎯','Point camera at your marker');
-      targetLostTimer=null;
-    },3000);
+    clearTimeout(arReadyTimer);
+    loadingOverlay.classList.remove('active');
+    setTimeout(()=>loadAvatar(),100);           // start loading avatar once camera is live
+    setStatus('','Point camera at your marker');
   });
 
-  // ── Start AR ──────────────────────────────────────────────────────────────
-  // Full AR start logic as named inner function
-  function _startAR() {
-    if(arStarted) return; arStarted=true;
-    startBtn.disabled=true; startBtn.textContent='Starting...';
-    try{ const AC=window.AudioContext||window.webkitAudioContext; if(AC){ const ctx=new AC(); const buf=ctx.createBuffer(1,1,22050); const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination); src.start(0); } }catch(e){}
-    try{ const d=new Audio(); d.src='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA'; d.play().catch(()=>{}); }catch(e){}
+  sceneEl.addEventListener('arError',()=>{
+    clearTimeout(arReadyTimer);
+    loadingText.textContent='Camera error — tap Retry';
+    retryBtn.style.display='block';
+    setStatus('err','AR error');
+  });
+
+  targetEl.addEventListener('targetFound',()=>{
+    if(targetLostTimer){clearTimeout(targetLostTimer);targetLostTimer=null;}
+    loadingOverlay.classList.remove('active');
+    anchorEl.object3D.visible=true;            // restore avatar visibility
+    showChat();
+    setStatus('','Shankh is here! Ask anything');
+    playAnim(ANIM.IDLE);
+  });
+
+  targetEl.addEventListener('targetLost',()=>{
+    // ★ Hide avatar IMMEDIATELY when marker is lost
+    anchorEl.object3D.visible=false;
+    setStatus('','Point camera at your marker');
+
+    // ★ Hide chat panel after exactly 2 seconds
+    if(targetLostTimer) clearTimeout(targetLostTimer);
+    targetLostTimer=setTimeout(()=>{
+      hideChat(true);
+      targetLostTimer=null;
+    },2000);
+  });
+
+  // ── Start AR ─────────────────────────────────────────────────────────────
+  function _startAR(){
+    if(arStarted)return; arStarted=true;
+    startBtn.disabled=true; startBtn.textContent='Starting…';
+
+    // iOS AudioContext unlock
+    try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){const c=new AC();const b=c.createBuffer(1,1,22050);const s=c.createBufferSource();s.buffer=b;s.connect(c.destination);s.start(0);}}catch(e){}
+    try{const d=new Audio();d.src='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';d.play().catch(()=>{});}catch(e){}
+
+    // ★ Hide splash → camera feed is now visible (a-scene is behind at z=0)
     document.getElementById('instructions').style.display='none';
-    loadingOverlay.classList.add('active'); loadingText.textContent='Requesting camera...';
-    setStatus('⏳','Requesting camera...');
-    arReadyTimer=setTimeout(()=>{ loadingText.textContent='Taking too long — tap Retry'; retryBtn.style.display='block'; setStatus('❌','Check camera permission'); },30000);
+
+    loadingOverlay.classList.add('active');
+    loadingText.textContent='Requesting camera…';
+    setStatus('','Requesting camera…');
+
+    arReadyTimer=setTimeout(()=>{
+      loadingText.textContent='Taking too long — tap Retry';
+      retryBtn.style.display='block';
+      setStatus('err','Check camera permission');
+    },30000);
+
     const tryStart=()=>{
       const sys=sceneEl.systems['mindar-image-system'];
-      if(sys){ loadingText.textContent='Starting AR engine...'; sys.start(); }
-      else{ loadingText.textContent='AR system not found — tap Retry'; retryBtn.style.display='block'; }
+      if(sys){loadingText.textContent='Starting AR engine…';sys.start();}
+      else{loadingText.textContent='AR system not found';retryBtn.style.display='block';}
     };
     if(sceneEl.hasLoaded) tryStart(); else sceneEl.addEventListener('loaded',tryStart,{once:true});
   }
-  window._startAR = _startAR;  // expose so global stub can call it
-  if (_arPending) { _arPending=false; _startAR(); }  // fire if user tapped before load
+  window._startAR=_startAR;
+  if(_arPending){_arPending=false;_startAR();}
 
-  // ── Voice input with auto language detection ──────────────────────────────
-  /**
-   * How auto-detection works:
-   *
-   * 1. Browser SpeechRecognition captures audio using the currently active
-   *    language locale (improves accuracy for that language).
-   * 2. After getting the transcript, GPT-4o-mini classifies the language
-   *    in ~50ms using a single-token response.
-   * 3. If detected language differs from the current activeLangKey:
-   *    - setActiveLang() is called → dropdown updates, toast pill shows
-   *    - Recognition locale is updated for the next utterance
-   *    - Bhashini serviceId is pre-warmed in background
-   * 4. The message is then sent, and Shankh replies in the detected language.
-   *
-   * The dropdown still works as a manual override at any time.
-   */
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let recognizing = false;
+  sendBtn.addEventListener('click',()=>sendMessage(userInput.value));
+  userInput.addEventListener('keypress',e=>{if(e.key==='Enter')sendMessage(userInput.value);});
 
-  if (SR) {
-    const rec = new SR();
-    rec.continuous     = false;
-    rec.interimResults = false;
-    rec.lang           = LANG_META[activeLangKey].browserLang;
-
-    rec.onresult = async (e) => {
-      const transcript = e.results[0][0].transcript;
-      voiceBtn.classList.remove('listening');
-      recognizing = false;
-      userInput.value = transcript;
-      // sendMessage handles detection internally — just forward transcript
-      await sendMessage(transcript);
-    };
-
-    rec.onerror = (e) => {
-      voiceBtn.classList.remove('listening');
-      recognizing = false;
-      if (e.error === 'no-speech') setStatus('🎤','No speech — try again');
-      else setStatus('❌','Voice error: '+e.error);
-    };
-    rec.onend = () => { voiceBtn.classList.remove('listening'); recognizing = false; };
-
-    voiceBtn.addEventListener('click',()=>{
-      if (recognizing) {
-        rec.stop();
-      } else {
-        rec.lang = LANG_META[activeLangKey]?.browserLang || 'en-IN';
-        try { rec.start(); } catch(e){ console.warn('rec.start():', e); return; }
-        voiceBtn.classList.add('listening');
-        recognizing = true;
-        setStatus('🎤',`Listening (${LANG_META[activeLangKey].name})...`);
-      }
-    });
-
-    // Keep recognition locale in sync with manual dropdown change
-    langSelect.addEventListener('change',()=>{
-      rec.lang = LANG_META[activeLangKey]?.browserLang || 'en-IN';
-    });
-
-  } else {
-    voiceBtn.disabled = true;
-    voiceBtn.title    = 'Voice not supported in this browser';
-  }
-
-  sendBtn.addEventListener('click', ()=>sendMessage(userInput.value));
-  userInput.addEventListener('keypress', e=>{ if(e.key==='Enter') sendMessage(userInput.value); });
-
-  setStatus('🎯','Ready — tap Start AR');
-  setActiveLang('en', false); // init UI silently
+  setStatus('','Ready — tap Start AR');
+  setLang('en',false);
 });
 </script>
 </body>
