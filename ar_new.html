@@ -49,7 +49,6 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* CRITICAL: transparent so the camera feed (a-scene canvas) shows through */
 html, body {
   width: 100%; height: 100%; overflow: hidden;
   font-family: var(--font-body);
@@ -58,7 +57,6 @@ html, body {
   -webkit-touch-callout: none;
 }
 
-/* a-scene renders the camera feed — must be full viewport at z=0 */
 a-scene {
   position: fixed !important;
   top: 0; left: 0;
@@ -69,6 +67,1263 @@ a-scene {
 .mindar-ui-loading,
 .mindar-ui-scanning { display: none !important; }
 
+/* ── Status bar ── */
+#status-bar {
+  position: fixed;
+  top: calc(var(--safe-top) + 12px);
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(10,15,30,0.72);
+  border: 1px solid var(--border);
+  border-radius: 40px; padding: 8px 18px;
+  z-index: 500; pointer-events: none;
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  white-space: nowrap; max-width: calc(100vw - 32px);
+}
+#status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--teal); flex-shrink: 0;
+  box-shadow: 0 0 8px var(--teal); transition: background 0.3s;
+}
+#status-dot.warn { background: var(--gold);  box-shadow: 0 0 8px var(--gold); }
+#status-dot.err  { background: #ff4f6d;      box-shadow: 0 0 8px #ff4f6d; }
+#status-text {
+  font-family: var(--font-body);
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.85); letter-spacing: 0.3px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Language pill ── */
+#lang-pill {
+  position: fixed;
+  top: calc(var(--safe-top) + 60px); right: 16px;
+  background: linear-gradient(135deg, var(--teal), var(--teal2));
+  color: var(--ink); padding: 5px 14px 5px 10px;
+  border-radius: 40px; font-size: 11px; font-weight: 700;
+  font-family: var(--font-head); z-index: 600; pointer-events: none;
+  display: flex; align-items: center; gap: 6px;
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity 0.35s, transform 0.35s; letter-spacing: 0.4px;
+}
+#lang-pill.visible { opacity: 1; transform: translateY(0); }
+
+/* ── RAG pill ── */
+#rag-pill {
+  position: fixed;
+  top: calc(var(--safe-top) + 60px); left: 16px;
+  background: linear-gradient(135deg, #667eea, #4f5fb3);
+  color: #fff; padding: 5px 14px; border-radius: 40px;
+  font-size: 11px; font-weight: 700; font-family: var(--font-head);
+  letter-spacing: 0.4px; z-index: 500; pointer-events: none;
+  opacity: 0; transform: translateY(-6px);
+  transition: opacity 0.35s, transform 0.35s;
+}
+#rag-pill.visible { opacity: 1; transform: translateY(0); }
+
+/* ── Splash screen ── */
+#instructions {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ink);
+  background-image:
+    radial-gradient(ellipse 60% 40% at 50% 0%,  rgba(0,212,180,0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 80%,  rgba(245,200,66,0.08) 0%, transparent 60%);
+}
+#instructions::before {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg,  transparent, transparent 39px, rgba(255,255,255,0.025) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.025) 40px);
+  pointer-events: none;
+}
+#splash-card {
+  position: relative;
+  width: min(360px, calc(100vw - 32px));
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 28px; padding: 36px 28px 32px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+  animation: cardIn 0.7s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes cardIn {
+  from { opacity:0; transform: translateY(32px) scale(0.97); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+.splash-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, rgba(0,212,180,0.15), rgba(0,212,180,0.05));
+  border: 1px solid rgba(0,212,180,0.3); border-radius: 40px;
+  padding: 4px 12px; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  color: var(--teal); font-family: var(--font-head); margin-bottom: 16px; text-transform: uppercase;
+}
+.splash-title {
+  font-family: var(--font-head); font-size: clamp(28px,8vw,36px);
+  font-weight: 800; color: #fff; line-height: 1; letter-spacing: -1px; margin-bottom: 4px;
+}
+.splash-title span {
+  background: linear-gradient(135deg, var(--gold), var(--teal));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.splash-sub { font-size: 12px; color: rgba(255,255,255,0.45); font-weight: 400; margin-bottom: 24px; letter-spacing: 0.3px; }
+
+#marker-wrap { position: relative; width: 120px; height: 120px; margin: 0 auto 24px; }
+#marker-ring {
+  position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid transparent;
+  background: linear-gradient(var(--ink), var(--ink)) padding-box,
+              linear-gradient(135deg, var(--teal), var(--gold)) border-box;
+  animation: spin 8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#marker-inner {
+  position: relative; width: 100%; height: 100%;
+  border-radius: 16px; overflow: hidden; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+#marker-inner img { width: 90%; height: 90%; object-fit: contain; }
+.marker-scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--teal), transparent);
+  animation: scanLine 2s ease-in-out infinite;
+}
+@keyframes scanLine { 0%{top:0%;opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{top:100%;opacity:0} }
+
+.steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.step {
+  display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+}
+.step-num {
+  min-width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; font-family: var(--font-head); flex-shrink: 0;
+  background: linear-gradient(135deg, var(--teal), #00b4a0); color: var(--ink);
+}
+.step p { font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.5; }
+
+#start-btn {
+  width: 100%; padding: 15px 20px; border: none; outline: none; border-radius: 40px;
+  font-family: var(--font-head); font-size: 15px; font-weight: 700; letter-spacing: 0.5px;
+  cursor: pointer; position: relative; overflow: hidden;
+  background: linear-gradient(135deg, var(--teal), var(--gold2)); color: var(--ink);
+  box-shadow: 0 8px 32px rgba(0,212,180,0.35);
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+}
+#start-btn::before { content:''; position:absolute; inset:0; background:rgba(255,255,255,0.15); opacity:0; transition:opacity 0.2s; }
+#start-btn:active { transform: scale(0.97); }
+#start-btn:active::before { opacity: 1; }
+#start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Loading overlay ── */
+#loading-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,15,30,0.75);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px; z-index: 1500;
+}
+#loading-overlay.active { display: flex; }
+.loader-ring { width: 56px; height: 56px; position: relative; }
+.loader-ring::before, .loader-ring::after {
+  content: ''; position: absolute; inset: 0;
+  border-radius: 50%; border: 3px solid transparent;
+}
+.loader-ring::before { border-top-color: var(--teal);  animation: spin 0.9s linear infinite; }
+.loader-ring::after  { border-bottom-color: var(--gold); animation: spin 1.4s linear infinite reverse; }
+#loading-text { font-size: 14px; color: rgba(255,255,255,0.7); text-align: center; }
+#retry-btn {
+  padding: 11px 28px; background: linear-gradient(135deg, var(--teal), var(--teal2));
+  border: none; border-radius: 40px; font-family: var(--font-head);
+  font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; display: none;
+}
+
+/* ── Chat panel ── */
+#chat-overlay {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 16px);
+  left: 50%; transform: translateX(-50%);
+  width: min(440px, calc(100vw - 24px));
+  background: rgba(10,15,30,0.82);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 24px; padding: 16px;
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  z-index: 1000; display: none; touch-action: pan-y;
+}
+#chat-overlay.active { display: block; }
+
+#chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.chat-brand { display: flex; align-items: center; gap: 8px; }
+.chat-avatar-icon {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--teal), var(--gold2));
+  display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+}
+.chat-brand-name { font-family: var(--font-head); font-size: 15px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+.chat-brand-sub  { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 400; display: block; line-height: 1; }
+
+#lang-control { display: flex; align-items: center; gap: 6px; }
+#lang-flag { font-size: 16px; line-height: 1; }
+#lang-select {
+  font-size: 12px; font-weight: 500;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px; padding: 5px 10px; color: rgba(255,255,255,0.85);
+  outline: none; cursor: pointer; -webkit-appearance: none; appearance: none; max-width: 110px;
+}
+#lang-select option { background: #1a2035; color: #fff; }
+#tts-badge {
+  padding: 3px 8px; background: rgba(0,212,180,0.12);
+  border: 1px solid rgba(0,212,180,0.25); border-radius: 20px;
+  font-size: 9px; font-weight: 700; color: var(--teal);
+  font-family: var(--font-head); letter-spacing: 0.5px; white-space: nowrap;
+}
+
+#chat-messages {
+  max-height: 200px; overflow-y: auto; margin-bottom: 12px; padding: 4px 2px;
+  scroll-behavior: smooth; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+#chat-messages::-webkit-scrollbar { width: 4px; }
+#chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.message {
+  padding: 9px 14px; border-radius: 16px;
+  font-size: 13px; line-height: 1.5; word-break: break-word;
+  margin-bottom: 6px; max-width: 88%;
+  animation: msgIn 0.25s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes msgIn { from{opacity:0;transform:translateY(8px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+.user-message { background: linear-gradient(135deg,#4f5fb3,#667eea); color:#fff; margin-left:auto; border-bottom-right-radius:4px; }
+.bot-message  { background: rgba(255,255,255,0.08); color:rgba(255,255,255,0.9); border-bottom-left-radius:4px; }
+.rag-indicator { font-size:10px; color:rgba(255,255,255,0.3); text-align:left; padding:0 4px 4px; letter-spacing:0.2px; }
+
+.typing-dots { display:flex; align-items:center; gap:4px; padding:10px 14px; background:rgba(255,255,255,0.08); border-radius:16px; border-bottom-left-radius:4px; width:fit-content; margin-bottom:6px; }
+.typing-dots span { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.4); animation:bounce 1.2s ease-in-out infinite; }
+.typing-dots span:nth-child(2){animation-delay:0.2s} .typing-dots span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+
+#input-row { display: flex; gap: 8px; align-items: center; }
+#user-input {
+  flex: 1; padding: 11px 16px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 40px; font-size: 14px; color: #fff;
+  outline: none; transition: border-color 0.2s, background 0.2s; -webkit-text-size-adjust: 100%;
+}
+#user-input::placeholder { color: rgba(255,255,255,0.3); }
+#user-input:focus { border-color: rgba(0,212,180,0.5); background: rgba(255,255,255,0.1); }
+
+.icon-btn {
+  width: 42px; height: 42px; min-width: 42px; border: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px;
+  transition: transform 0.15s, opacity 0.2s; -webkit-tap-highlight-color: transparent;
+}
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Voice button states ── */
+#voice-btn {
+  background: linear-gradient(135deg,#28a745,#20883a);
+  box-shadow: 0 4px 16px rgba(40,167,69,0.4); color: #fff;
+  position: relative; overflow: hidden;
+}
+#voice-btn.recording {
+  background: linear-gradient(135deg,#dc3545,#b02030);
+  animation: pulse 0.9s ease-in-out infinite;
+}
+#voice-btn.processing {
+  background: linear-gradient(135deg,#f59e0b,#d97706);
+  animation: none;
+}
+/* Recording timer badge */
+#rec-timer {
+  position: absolute; top: -6px; right: -6px;
+  background: #dc3545; color: #fff; font-size: 9px; font-weight: 700;
+  padding: 2px 5px; border-radius: 10px; font-family: var(--font-head);
+  display: none; letter-spacing: 0.3px; min-width: 24px; text-align: center;
+}
+#rec-timer.visible { display: block; }
+
+@keyframes pulse{0%,100%{box-shadow:0 4px 16px rgba(220,53,69,0.5)}50%{box-shadow:0 4px 24px rgba(220,53,69,0.8)}}
+#send-btn { background: linear-gradient(135deg,var(--teal),var(--teal2)); box-shadow:0 4px 16px rgba(0,212,180,0.4); color:var(--ink); font-size:18px; }
+
+#audio-banner {
+  display: none; position: fixed;
+  bottom: calc(var(--safe-bottom) + 200px);
+  left: 50%; transform: translateX(-50%);
+  background: linear-gradient(135deg,#f59e0b,#d97706); color:#fff;
+  padding: 13px 24px; border-radius: 40px;
+  font-family: var(--font-head); font-size: 13px; font-weight: 700;
+  z-index: 1100; cursor: pointer;
+  box-shadow: 0 8px 32px rgba(245,158,11,0.45); white-space: nowrap;
+}
+#audio-banner.visible { display: block; }
+
+/* ── Voice hint tooltip ── */
+#voice-hint {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 70px);
+  left: 50%; transform: translateX(-50%);
+  background: rgba(10,15,30,0.9); border: 1px solid rgba(220,53,69,0.4);
+  color: rgba(255,255,255,0.8); padding: 6px 14px; border-radius: 20px;
+  font-size: 11px; font-family: var(--font-head); font-weight: 700;
+  z-index: 1100; pointer-events: none; white-space: nowrap;
+  opacity: 0; transition: opacity 0.2s;
+}
+#voice-hint.visible { opacity: 1; }
+
+@media (max-height:680px) { #splash-card{padding:24px 20px} #marker-wrap{width:90px;height:90px} #chat-messages{max-height:140px} }
+@media (max-width:380px)  { #tts-badge{display:none} #chat-messages{max-height:160px} }
+</style>
+</head>
+<body>
+
+<div id="status-bar"><span id="status-dot"></span><span id="status-text">Initialising…</span></div>
+<div id="rag-pill">📊 Live data + knowledge</div>
+<div id="lang-pill">🌐 <span id="lang-pill-text">English</span></div>
+
+<a-scene
+  id="ar-scene"
+  mindar-image="imageTargetSrc: targets.mind;
+                autoStart: false;
+                uiLoading: no; uiError: no; uiScanning: no;
+                maxTrack: 1;
+                filterMinCF: 0.001; filterBeta: 0.01;
+                missTolerance: 200; warmupTolerance: 1;"
+  color-space="sRGB"
+  renderer="colorManagement: true; physicallyCorrectLights: true;"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+  <a-assets timeout="0"></a-assets>
+  <a-camera active="false" position="0 0 0"></a-camera>
+  <a-entity id="mindar-target" mindar-image-target="targetIndex: 0">
+    <a-entity id="avatar-anchor"></a-entity>
+  </a-entity>
+</a-scene>
+
+<div id="loading-overlay">
+  <div class="loader-ring"></div>
+  <p id="loading-text">Starting AR engine…</p>
+  <button id="retry-btn" onclick="location.reload()">Retry</button>
+</div>
+
+<div id="instructions">
+  <div id="splash-card">
+    <div class="splash-badge">🇮🇳 AR Financial Assistant · Multilingual</div>
+    <div class="splash-title"><span>Shankh</span> AR</div>
+    <p class="splash-sub">RAG-powered · 15 Indian languages · Live stock data</p>
+    <div id="marker-wrap">
+      <div id="marker-ring"></div>
+      <div id="marker-inner">
+        <img src="marker.jpg" alt="AR Marker">
+        <div class="marker-scan-line"></div>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="step-num">1</span><p>Print or display the marker image shown above</p></div>
+      <div class="step"><span class="step-num">2</span><p>Tap <strong style="color:var(--teal)">Start AR</strong> and allow camera access</p></div>
+      <div class="step"><span class="step-num">3</span><p>Point your camera at the marker to meet Shankh</p></div>
+      <div class="step"><span class="step-num">4</span><p>Hold 🎤 to speak in any Indian language — Shankh auto-detects!</p></div>
+    </div>
+    <button id="start-btn" onclick="startAR()">Start AR Experience →</button>
+    <script>
+      window.startAR = function(){ if(window._startAR) window._startAR(); else window._arPending=true; };
+    </script>
+  </div>
+</div>
+
+<div id="voice-hint">🔴 Recording… Release to send</div>
+<div id="audio-banner" onclick="unlockAndPlay()">👆 Tap to hear Shankh speak</div>
+
+<div id="chat-overlay">
+  <div id="chat-header">
+    <div class="chat-brand">
+      <div class="chat-avatar-icon">🐚</div>
+      <div>
+        <span class="chat-brand-name">Shankh</span>
+        <span class="chat-brand-sub">Financial AI · AR Mode</span>
+      </div>
+    </div>
+    <div id="lang-control">
+      <span id="lang-flag">🇮🇳</span>
+      <select id="lang-select">
+        <option value="en"  data-flag="🇬🇧">English</option>
+        <option value="hi"  data-flag="🇮🇳">हिन्दी</option>
+        <option value="bn"  data-flag="🇮🇳">বাংলা</option>
+        <option value="gu"  data-flag="🇮🇳">ગુજરાતી</option>
+        <option value="kn"  data-flag="🇮🇳">ಕನ್ನಡ</option>
+        <option value="ml"  data-flag="🇮🇳">മലയാളം</option>
+        <option value="mr"  data-flag="🇮🇳">मराठी</option>
+        <option value="or"  data-flag="🇮🇳">ଓଡ଼ିଆ</option>
+        <option value="pa"  data-flag="🇮🇳">ਪੰਜਾਬੀ</option>
+        <option value="ta"  data-flag="🇮🇳">தமிழ்</option>
+        <option value="te"  data-flag="🇮🇳">తెలుగు</option>
+        <option value="ur"  data-flag="🇮🇳">اردو</option>
+        <option value="as"  data-flag="🇮🇳">অসমীয়া</option>
+        <option value="mni" data-flag="🇮🇳">মৈতৈলোন্</option>
+        <option value="sat" data-flag="🇮🇳">ᱥᱟᱱᱛᱟᱲᱤ</option>
+      </select>
+      <span id="tts-badge">Bhashini TTS</span>
+    </div>
+  </div>
+  <div id="chat-messages"></div>
+  <div id="input-row">
+    <input type="text" id="user-input" placeholder="Ask about stocks, markets…" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="icon-btn" id="voice-btn" title="Hold to speak">
+      🎤
+      <span id="rec-timer"></span>
+    </button>
+    <button class="icon-btn" id="send-btn">➤</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+try{ if(window.tf?.wasm?.setWasmPaths) window.tf.wasm.setWasmPaths(window.location.origin+'/'); }catch(e){}
+
+const SERVER_URL = window.location.origin;
+
+const CONFIG = {
+  MODEL            : 'gpt-4o-mini',
+  BHASHINI_API_KEY : 'Ao3hrQ6R7ZW6q5Zwv0TvaasIdyC9A-kHtTfCX_VujGwISYVfBjU5lNwWg2haVQOS',
+  BHASHINI_INFER_URL:'https://dhruva-api.bhashini.gov.in/services/inference/pipeline',
+  // Max recording duration in seconds before auto-stop
+  MAX_REC_SECS     : 15,
+};
+
+// ── Whisper returns full English language names, NOT ISO codes.
+// e.g. "marathi", "gujarati", "hindi" — we must map these back to our ISO keys.
+// Without this map, LANG_META[wLang] is always undefined → detection silently fails.
+const WHISPER_LANG_MAP = {
+  english:'en', hindi:'hi', bengali:'bn', gujarati:'gu', kannada:'kn',
+  malayalam:'ml', marathi:'mr', odia:'or', oriya:'or', punjabi:'pa',
+  tamil:'ta', telugu:'te', urdu:'ur', assamese:'as', manipuri:'mni',
+  santali:'sat', nepali:'hi', sindhi:'ur',
+  // Whisper occasionally returns these alternate spellings
+  'hindi (devanagari)':'hi', 'marathi (devanagari)':'mr',
+};
+function whisperLangToISO(wLang) {
+  if (!wLang) return null;
+  const key = wLang.toLowerCase().trim();
+  // Direct ISO code? (e.g. "mr", "gu")
+  if (LANG_META[key]) return key;
+  // Full name lookup
+  return WHISPER_LANG_MAP[key] || null;
+}
+
+const LANG_META = {
+  en :{name:'English',  bhashini:'en', browserLang:'en-IN'},
+  hi :{name:'Hindi',    bhashini:'hi', browserLang:'hi-IN'},
+  bn :{name:'Bengali',  bhashini:'bn', browserLang:'bn-IN'},
+  gu :{name:'Gujarati', bhashini:'gu', browserLang:'gu-IN'},
+  kn :{name:'Kannada',  bhashini:'kn', browserLang:'kn-IN'},
+  ml :{name:'Malayalam',bhashini:'ml', browserLang:'ml-IN'},
+  mr :{name:'Marathi',  bhashini:'mr', browserLang:'mr-IN'},
+  or :{name:'Odia',     bhashini:'or', browserLang:'or-IN'},
+  pa :{name:'Punjabi',  bhashini:'pa', browserLang:'pa-IN'},
+  ta :{name:'Tamil',    bhashini:'ta', browserLang:'ta-IN'},
+  te :{name:'Telugu',   bhashini:'te', browserLang:'te-IN'},
+  ur :{name:'Urdu',     bhashini:'ur', browserLang:'ur-IN'},
+  as :{name:'Assamese', bhashini:'as', browserLang:'as-IN'},
+  mni:{name:'Manipuri', bhashini:'mni',browserLang:'en-IN'},
+  sat:{name:'Santali',  bhashini:'sat',browserLang:'en-IN'},
+};
+
+const BHASHINI_TTS_SVC = {
+  ta:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  te:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  kn:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  ml:'ai4bharat/indic-tts-coqui-dravidian-gpu--t4',
+  hi:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  mr:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  bn:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  gu:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  pa:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  or:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  ur:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  as:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  mni:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+  sat:'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4',
+};
+
+async function bhashiniTTS(text, lang) {
+  if(lang==='en') throw new Error('English not supported by Bhashini');
+  const res = await fetch(CONFIG.BHASHINI_INFER_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':CONFIG.BHASHINI_API_KEY},
+    body:JSON.stringify({
+      pipelineTasks:[{taskType:'tts',config:{
+        language:{sourceLanguage:LANG_META[lang]?.bhashini||lang},
+        serviceId:BHASHINI_TTS_SVC[lang]||BHASHINI_TTS_SVC['hi'],
+        gender:'male', samplingRate:8000
+      }}],
+      inputData:{input:[{source:text}],audio:[{audioContent:null}]}
+    })
+  });
+  if(!res.ok) throw new Error('Bhashini HTTP '+res.status);
+  const data=await res.json();
+  const b64=data?.pipelineResponse?.[0]?.audio?.[0]?.audioContent||data?.audio?.[0]?.audioContent;
+  if(!b64) throw new Error('Bhashini: no audio in response');
+  const bin=atob(b64), buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+// ── Script-based language detection (instant, no network) ────────────────────
+// NOTE: Devanagari (Hindi, Marathi, Nepali) cannot be distinguished by Unicode range.
+// For Devanagari text we deliberately return null and let detectLangGPT resolve it —
+// this prevents Marathi from being mis-labelled as Hindi (or vice versa).
+function detectLangFromScript(text) {
+  if(!text||text.trim().length<2) return null;
+  const c={};
+  for(const ch of text){
+    const p=ch.codePointAt(0);
+    // ⚠️  Devanagari (Hindi AND Marathi AND Nepali) — intentionally NOT mapped here.
+    //     Return null and let GPT/Whisper decide between hi/mr.
+    if(p>=0x0980&&p<=0x09FF) c.bn=(c.bn||0)+1;      // Bengali
+    else if(p>=0x0A00&&p<=0x0A7F) c.pa=(c.pa||0)+1; // Gurmukhi → Punjabi
+    else if(p>=0x0A80&&p<=0x0AFF) c.gu=(c.gu||0)+1; // Gujarati
+    else if(p>=0x0B00&&p<=0x0B7F) c.or=(c.or||0)+1; // Odia
+    else if(p>=0x0B80&&p<=0x0BFF) c.ta=(c.ta||0)+1; // Tamil
+    else if(p>=0x0C00&&p<=0x0C7F) c.te=(c.te||0)+1; // Telugu
+    else if(p>=0x0C80&&p<=0x0CFF) c.kn=(c.kn||0)+1; // Kannada
+    else if(p>=0x0D00&&p<=0x0D7F) c.ml=(c.ml||0)+1; // Malayalam
+    else if(p>=0x0600&&p<=0x06FF) c.ur=(c.ur||0)+1; // Arabic → Urdu
+  }
+  if(!Object.keys(c).length) return null;
+  return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+// ── GPT language detection proxy ──────────────────────────────────────────────
+async function detectLangGPT(text) {
+  try {
+    const r = await fetch(SERVER_URL + '/proxy/detect_lang', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body: JSON.stringify({ text })
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const code = d.choices?.[0]?.message?.content?.trim().toLowerCase().replace(/[^a-z]/g,'');
+    return LANG_META[code] ? code : null;
+  } catch(e) {
+    console.warn('detectLangGPT failed (non-fatal):', e.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ WHISPER TRANSCRIPTION
+// Replaces Web Speech API. Sends recorded blob to Flask /transcribe → Whisper.
+// Much more accurate for Indian accents and all 15 languages.
+// ─────────────────────────────────────────────────────────────────────────────
+async function whisperTranscribe(audioBlob, langHint) {
+  const fd = new FormData();
+  // Use .webm extension so Whisper recognises it; MediaRecorder produces webm on Chrome
+  fd.append('audio', audioBlob, 'voice.webm');
+  if (langHint && langHint !== 'en') fd.append('lang', langHint);
+
+  const r = await fetch(SERVER_URL + '/transcribe', {
+    method: 'POST',
+    headers: {'ngrok-skip-browser-warning':'true'},
+    body: fd,
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(()=>({}));
+    throw new Error('Whisper error ' + r.status + ': ' + (err.error||'unknown'));
+  }
+  return await r.json(); // { text, detected_language }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ INVESTMENT INTENT DETECTION
+// For questions like "should I invest in X / should I buy X / worth buying X"
+// → skip RAG, skip raw price data, use ONLY the analyst insights sheet signal.
+// This prevents GPT from hallucinating a conflicting opinion from price data.
+// ─────────────────────────────────────────────────────────────────────────────
+const INVEST_INTENT_KW = [
+  'should i','should we','worth buying','worth investing','good investment',
+  'kya kharidna','kya invest','invest karna','kharidna chahiye','lena chahiye',
+  'kharidu','khareedna','nivesh karna','lena uchit','kya lena','buy karna',
+  'buy kar','sell karna','sell kar','paisa lagaye','paisa lagana',
+  'invest kare','invest karna chahiye','recommend','suggest','advise',
+  'ख़रीदना चाहिए','निवेश','खरीदना','बेचना','लेना चाहिए',
+];
+function isInvestmentQ(q) {
+  const l = q.toLowerCase();
+  return INVEST_INTENT_KW.some(k => l.includes(k));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STOCK HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+const STOCK_KW=['stock','share','price','nifty','sensex','market','invest','buy','sell',
+  'reliance','tcs','infosys','infy','hdfc','icici','sbi','wipro','bajaj','titan','maruti',
+  'ipo','trading','portfolio','dividend','pe ratio','market cap','bse','nse','banknifty',
+  'midcap','smallcap','bluechip','equity','mutual fund','should i','worth buying',
+  'good investment','recommend','nivesh','kharidna','bechna','sheyar','bazaar'];
+const STOCK_SYM={
+  'reliance':'RELIANCE','tcs':'TCS','infosys':'INFY','infy':'INFY',
+  'hdfc':'HDFCBANK','hdfcbank':'HDFCBANK','icici':'ICICIBANK','sbi':'SBIN',
+  'wipro':'WIPRO','bajaj':'BAJFINANCE','titan':'TITAN','maruti':'MARUTI',
+  'airtel':'BHARTIARTL','kotak':'KOTAKBANK','axis':'AXISBANK','lt':'LT',
+  'itc':'ITC','asian paints':'ASIANPAINT','nifty':'nifty','sensex':'sensex','banknifty':'banknifty'
+};
+
+function isStockQ(q){return STOCK_KW.some(k=>q.toLowerCase().includes(k));}
+function stockSym(q){
+  const l=q.toLowerCase();
+  for(const[n,s] of Object.entries(STOCK_SYM)) if(l.includes(n)) return s;
+  const m=q.match(/\b([A-Z]{2,10})\b/); return m?m[1]:null;
+}
+
+async function fetchStock(sym){
+  try{
+    const[p,i]=await Promise.allSettled([
+      fetch(SERVER_URL+'/stock/price',   {method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({symbol:sym})}),
+      fetch(SERVER_URL+'/stock/insights',{method:'POST',headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},body:JSON.stringify({stock_name:sym.toLowerCase()})})
+    ]);
+    return{
+      priceData   :(p.status==='fulfilled'&&p.value.ok)?await p.value.json():null,
+      insightsData:(i.status==='fulfilled'&&i.value.ok)?await i.value.json():null
+    };
+  }catch(e){return{priceData:null,insightsData:null};}
+}
+
+// ── Fetch ONLY insights (used when question is investment-intent) ─────────────
+async function fetchInsightsOnly(sym){
+  try{
+    const r=await fetch(SERVER_URL+'/stock/insights',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body:JSON.stringify({stock_name:sym.toLowerCase()})
+    });
+    if(!r.ok) return null;
+    return await r.json();
+  }catch(e){return null;}
+}
+
+function fmtStock(sym,pd,id){
+  const parts=[];
+  if(pd){
+    const chg=pd.change_percent!=null?` (${pd.change_percent>0?'+':''}${pd.change_percent}% today)`:'';
+    parts.push(`LIVE DATA for ${pd.company_name||sym}:\n• Price: Rs ${pd.current_price}${chg}\n`+
+      (pd.day_high?`• Range: Rs ${pd.day_low}–${pd.day_high}\n`:'')+
+      (pd.pe_ratio?`• P/E: ${pd.pe_ratio.toFixed(1)}\n`:'')+
+      `• As of: ${new Date(pd.timestamp).toLocaleTimeString('en-IN')}`);
+  }
+  if(id){
+    parts.push(`ANALYST SIGNALS for ${id.stock_name}:\n• Signal: ${id.signal_label}\n• FMP rec: ${id.fmp_rec}\n• Agreement: ${id.agreement}\n\nGive a direct investment opinion in 1-2 sentences. Start with YES/NO/HOLD.`);
+  }
+  return parts.length?parts.join('\n\n'):null;
+}
+
+// ── Format for investment-only response ──────────────────────────────────────
+function fmtInsightOnly(sym, id) {
+  if (!id) return null;
+  return `ANALYST SIGNAL (from authoritative insights sheet):\n` +
+    `• Stock: ${id.stock_name}\n` +
+    `• Signal: ${id.signal_label}\n` +
+    `• FMP Recommendation: ${id.fmp_rec}\n` +
+    `• Analyst agreement: ${id.agreement}\n` +
+    `• Date: ${id.date}\n\n` +
+    `INSTRUCTIONS: Answer the investment question in EXACTLY 1 sentence based ONLY on the signal above. ` +
+    `Start with "${id.signal_label === 'BUY' ? 'Yes, buy' : id.signal_label === 'SELL' ? 'No, avoid' : 'Hold — wait'}". ` +
+    `Do NOT mention prices, PE ratio, or general advice. Reference only the analyst signal.`;
+}
+
+async function ragContext(query){
+  try{
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),8000);
+    const r=await fetch(SERVER_URL+'/retrieve',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body:JSON.stringify({query,k:3,threshold:0.3}),
+      signal:ctrl.signal
+    });
+    clearTimeout(t);
+    if(!r.ok) return null;
+    const d=await r.json();
+    if(!d.results?.length) return null;
+    return d.results.map((x,i)=>`[${i+1}] ${x.excerpt} (Source: ${x.filename}, p.${x.page_num})`).join('\n');
+  }catch(e){
+    console.warn('RAG (non-fatal):',e.message);
+    return null;
+  }
+}
+
+let _arPending=false;
+window.startAR=function(){if(window._startAR)window._startAR();else _arPending=true;};
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('load',function(){
+  if(typeof AFRAME==='undefined'){document.getElementById('status-text').textContent='A-Frame failed';return;}
+
+  const ANIM={IDLE:'idle',THINK:'think',TALK:'baat_karle_bhai'};
+  const RHUBARB_TO_VISEME={A:'viseme_A',B:'viseme_B',C:'viseme_C',D:'viseme_D',E:'viseme_E',F:'viseme_F',G:'viseme_G',H:'viseme_H',X:'viseme_X'};
+
+  let mixer=null, animations={}, currentActions=[], morphMeshes=[];
+  let glbLoaded=false, currentAudio=null, pendingAudio=null;
+  let currentMouthCues=[], isPlayingLipSync=false;
+  let arStarted=false, arReadyTimer=null, chatEverShown=false;
+  let targetLostTimer=null, inputFocused=false;
+  let activeLangKey='en', langLocked=false;
+
+  // ── MediaRecorder state ────────────────────────────────────────────────────
+  let mediaRecorder=null, audioChunks=[], recStream=null;
+  let recTimerInterval=null, recSeconds=0;
+  let isRecording=false;
+
+  const conversationHistory=[{
+    role:'system',
+    content:'You are Shankh, a confident AR financial assistant for Indian stock markets. You have access to LIVE stock prices and ANALYST SIGNALS. Give DIRECT investment opinions — never say "consult a financial advisor". Keep every response to 1-2 short sentences (spoken aloud). Use "Rs" for prices. Plain language, no jargon. CRITICAL: Always reply in the EXACT same language the user is speaking. Never default to English unless the user spoke English.',
+  }];
+
+  const chatOverlay    = document.getElementById('chat-overlay');
+  const chatMessages   = document.getElementById('chat-messages');
+  const userInput      = document.getElementById('user-input');
+  const sendBtn        = document.getElementById('send-btn');
+  const voiceBtn       = document.getElementById('voice-btn');
+  const recTimer       = document.getElementById('rec-timer');
+  const voiceHint      = document.getElementById('voice-hint');
+  const statusDot      = document.getElementById('status-dot');
+  const statusTxt      = document.getElementById('status-text');
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const loadingText    = document.getElementById('loading-text');
+  const retryBtn       = document.getElementById('retry-btn');
+  const startBtn       = document.getElementById('start-btn');
+  const audioBanner    = document.getElementById('audio-banner');
+  const ragPill        = document.getElementById('rag-pill');
+  const langSelect     = document.getElementById('lang-select');
+  const langFlag       = document.getElementById('lang-flag');
+  const langPill       = document.getElementById('lang-pill');
+  const langPillText   = document.getElementById('lang-pill-text');
+  const sceneEl        = document.getElementById('ar-scene');
+  const targetEl       = document.querySelector('[mindar-image-target]');
+  const anchorEl       = document.getElementById('avatar-anchor');
+
+  userInput.addEventListener('focus',()=>{inputFocused=true;});
+  userInput.addEventListener('blur', ()=>{inputFocused=false;});
+
+  function setStatus(dot,text){
+    statusDot.className='';
+    if(dot==='warn') statusDot.classList.add('warn');
+    else if(dot==='err') statusDot.classList.add('err');
+    statusTxt.textContent=text;
+  }
+  function showChat(){chatEverShown=true;chatOverlay.classList.add('active');}
+  function hideChat(force=false){
+    if(!force&&(!chatEverShown||inputFocused||isPlayingLipSync||sendBtn.disabled))return;
+    chatOverlay.classList.remove('active');
+  }
+  function setLang(key,toast){
+    if(!LANG_META[key])return;
+    activeLangKey=key;
+    if(langSelect){langSelect.value=key;const o=langSelect.querySelector(`option[value="${key}"]`);if(langFlag)langFlag.textContent=o?.dataset?.flag||'🌐';}
+    if(toast){langPillText.textContent=LANG_META[key].name;langPill.classList.add('visible');setTimeout(()=>langPill.classList.remove('visible'),3500);}
+  }
+  if(langSelect) langSelect.addEventListener('change',()=>{langLocked=true;setLang(langSelect.value,true);});
+
+  let typingEl=null;
+  function showTyping(){if(typingEl)return;typingEl=document.createElement('div');typingEl.className='typing-dots';typingEl.innerHTML='<span></span><span></span><span></span>';chatMessages.appendChild(typingEl);chatMessages.scrollTop=chatMessages.scrollHeight;}
+  function hideTyping(){if(typingEl){typingEl.remove();typingEl=null;}}
+  function addMsg(text,type,src){
+    hideTyping();
+    const d=document.createElement('div');d.className='message '+(type||'bot')+'-message';d.textContent=text;chatMessages.appendChild(d);
+    if(src){const s=document.createElement('div');s.className='rag-indicator';s.textContent='via '+src;chatMessages.appendChild(s);}
+    chatMessages.scrollTop=chatMessages.scrollHeight;
+  }
+
+  window.unlockAndPlay=function(){audioBanner.classList.remove('visible');if(pendingAudio){pendingAudio.play().catch(console.error);pendingAudio=null;}};
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ✅ OPTIMISED sendMessage
+  // Key change: lang detection runs IN PARALLEL with RAG + stock fetches.
+  // Old flow:  await detectLang → await [rag, stock] → await GPT   (3 serial hops)
+  // New flow:  await [detectLang, rag, stock] → await GPT           (2 serial hops)
+  // Saves ~800–1200 ms per message.
+  //
+  // Also: investment questions bypass RAG and raw price — insights-only signal.
+  // ─────────────────────────────────────────────────────────────────────────────
+  async function sendMessage(msg){
+    msg=msg.trim();if(!msg)return;
+    addMsg(msg,'user'); userInput.value=''; sendBtn.disabled=true;
+    showTyping(); playAnim(ANIM.THINK);
+    try{
+      const isInvest = isInvestmentQ(msg);
+      const sym      = isStockQ(msg) ? stockSym(msg) : null;
+
+      // ✅ ALL network calls fire simultaneously
+      setStatus('warn','Fetching data…');
+
+      const parallelTasks = [
+        // 1. Lang detection (only if not locked)
+        !langLocked ? detectLangGPT(msg) : Promise.resolve(null),
+        // 2. RAG — skip entirely for investment questions (prevents noise)
+        !isInvest   ? ragContext(msg)    : Promise.resolve(null),
+        // 3. Stock — investment questions only fetch insights; others fetch both
+        sym
+          ? (isInvest ? fetchInsightsOnly(sym) : fetchStock(sym))
+          : Promise.resolve(null),
+      ];
+
+      const [detectedLang, rag, stockResult] = await Promise.all(parallelTasks);
+
+      // Apply detected language
+      if(detectedLang && !langLocked){ langLocked=true; setLang(detectedLang,true); }
+      const rLang = activeLangKey;
+      const rName = LANG_META[rLang]?.name || 'English';
+
+      // Build context block
+      const ctx=[]; let srcLabel=null;
+
+      if(isInvest && sym){
+        // Investment question: ONLY analyst signal, nothing else
+        const insightsData = stockResult; // fetchInsightsOnly returns the insights object directly
+        const sc = fmtInsightOnly(sym, insightsData);
+        if(sc){
+          ctx.push(sc);
+          srcLabel = insightsData ? '📊 Signal: '+insightsData.signal_label : '📊 Insights';
+        } else {
+          // No insights found — tell GPT honestly
+          ctx.push(`No analyst signal found for ${sym} in the insights database. Tell the user the signal is not available for this stock.`);
+          srcLabel = '📊 No signal';
+        }
+      } else {
+        // Non-investment question: use RAG + full price data as before
+        if(rag){ ctx.push('KNOWLEDGE BASE:\n'+rag); srcLabel='📚 KB'; }
+        if(stockResult?.priceData || stockResult?.insightsData){
+          const sc=fmtStock(sym, stockResult.priceData, stockResult.insightsData);
+          if(sc){
+            ctx.push(sc);
+            srcLabel = srcLabel
+              ? '📚 KB + 📊 Live'
+              : stockResult.insightsData ? '📊 '+stockResult.insightsData.signal_label : '📊 Live';
+          }
+        }
+      }
+
+      if(ctx.length){ragPill.classList.add('visible');setTimeout(()=>ragPill.classList.remove('visible'),3000);}
+
+      // ✅ GPT via Flask proxy
+      setStatus('','Getting answer…');
+      const msgs=[
+        ...conversationHistory,
+        {role:'system', content:`Reply ONLY in ${rName} using its native script. Do NOT use English.`}
+      ];
+      if(ctx.length) msgs.push({role:'system', content:'Use this data:\n\n'+ctx.join('\n\n---\n\n')});
+      msgs.push({role:'user', content:msg});
+
+      const gr = await fetch(SERVER_URL + '/proxy/chat', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+        body: JSON.stringify({
+          model       : CONFIG.MODEL,
+          messages    : msgs,
+          max_tokens  : isInvest ? 80 : 180,   // shorter for investment answers
+          temperature : isInvest ? 0.3 : 0.7,  // more deterministic for signal-based answers
+        })
+      });
+      if(!gr.ok) throw new Error('GPT proxy error ' + gr.status);
+      const reply=(await gr.json()).choices[0].message.content.trim();
+
+      conversationHistory.push({role:'user',content:msg},{role:'assistant',content:reply});
+      addMsg(reply,'bot',srcLabel);
+      await speakBhashini(reply,rLang);
+
+    }catch(err){
+      console.error('sendMessage:',err);
+      hideTyping(); addMsg('Error: '+err.message,'bot'); playAnim(ANIM.IDLE);
+    }finally{
+      sendBtn.disabled=false;
+    }
+  }
+
+  // ── TTS ──────────────────────────────────────────────────────────────────
+  async function speakBhashini(text,lang){
+    if(lang==='en'){
+      setStatus('','Speaking…');
+      await speakRhubarb(text).catch(()=>browserTTS(text,'en-IN'));
+      return;
+    }
+    setStatus('','Generating speech (Bhashini · '+LANG_META[lang]?.name+')…');
+    try{
+      const buf=await bhashiniTTS(text,lang);
+      const url=URL.createObjectURL(new Blob([buf],{type:'audio/wav'}));
+      currentMouthCues=[];
+      await playAudio(url,true,lang);
+    }catch(err){
+      console.warn('Bhashini failed:',err.message,'→ fallback');
+      setStatus('warn','Using fallback TTS');
+      await speakRhubarb(text).catch(()=>browserTTS(text,LANG_META[lang]?.browserLang||'en-IN'));
+    }
+  }
+
+  async function speakRhubarb(text){
+    const r=await fetch(SERVER_URL+'/generate_lipsync',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','ngrok-skip-browser-warning':'true'},
+      body:JSON.stringify({text})
+    });
+    if(!r.ok) throw new Error('Rhubarb '+r.status);
+    const d=await r.json();
+    currentMouthCues=d.lipsync?.mouthCues||[];
+    await playAudio(SERVER_URL+d.audio_url,false,'en');
+  }
+
+  function browserTTS(text,lang){
+    const u=new SpeechSynthesisUtterance(text); u.lang=lang;
+    u.onstart=()=>{isPlayingLipSync=true;playAnim(ANIM.TALK);setStatus('','Speaking…');};
+    u.onend  =()=>{isPlayingLipSync=false;resetMouth();playAnim(ANIM.IDLE);setStatus('','Ready to chat');};
+    window.speechSynthesis.speak(u);
+  }
+
+  function genRhythmicCues(dur){
+    const c=[],r=0.12;let t=0;
+    while(t<dur){c.push({start:t,end:t+r*0.7,value:'A'});c.push({start:t+r*0.7,end:t+r,value:'X'});t+=r;}
+    return c;
+  }
+
+  async function playAudio(url,isBlob,lang){
+    return new Promise(res=>{
+      const a=new Audio(url); a.preload='auto'; currentAudio=a;
+      a.addEventListener('loadedmetadata',()=>{
+        if(isBlob&&!currentMouthCues.length) currentMouthCues=genRhythmicCues(a.duration);
+      });
+      a.addEventListener('playing',()=>{
+        isPlayingLipSync=true; audioBanner.classList.remove('visible');
+        setStatus('','Speaking in '+LANG_META[lang]?.name+'…');
+        playAnim(ANIM.TALK); animateMouth();
+      });
+      a.addEventListener('ended',()=>{
+        isPlayingLipSync=false; currentAudio=null; pendingAudio=null;
+        resetMouth(); playAnim(ANIM.IDLE); setStatus('','Ready to chat');
+        if(isBlob) URL.revokeObjectURL(url); res();
+      });
+      a.addEventListener('error',()=>{
+        isPlayingLipSync=false; resetMouth(); playAnim(ANIM.IDLE); setStatus('err','Audio error');
+        if(isBlob) URL.revokeObjectURL(url); res();
+      });
+      const p=a.play();
+      if(p) p.catch(e=>{
+        if(e.name==='NotAllowedError'){pendingAudio=a;audioBanner.classList.add('visible');setStatus('warn','Tap banner to hear');}
+        else{setStatus('err',e.message);res();}
+      });
+    });
+  }
+
+  // ── Avatar loading ────────────────────────────────────────────────────────
+  function loadAvatar(){
+    if(glbLoaded)return;
+    if(!window._loadersReady){setTimeout(loadAvatar,150);return;}
+    glbLoaded=true;
+    setStatus('','Loading avatar…');
+
+    const THREE      = AFRAME.THREE;
+    const GLTFLoader  = window._GLTFLoader;
+    const DRACOLoader = window._DRACOLoader;
+
+    const draco=new DRACOLoader();
+    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+    draco.preload();
+    const loader=new GLTFLoader();
+    loader.setDRACOLoader(draco);
+
+    loader.load('avatar_hq.glb',
+      gltf=>{
+        const model=gltf.scene;
+
+        if(gltf.animations?.length){
+          mixer=new THREE.AnimationMixer(model);
+          gltf.animations.forEach(clip=>{
+            const clean=new THREE.AnimationClip(clip.name,clip.duration,
+              clip.tracks.filter(t=>!t.name.toLowerCase().includes('viseme')));
+            if(clean.tracks.length) animations[clip.name]=mixer.clipAction(clean);
+          });
+        }
+
+        model.traverse(child=>{
+          if(!child.isMesh||!child.morphTargetDictionary)return;
+          if(Object.keys(child.morphTargetDictionary).some(k=>k.startsWith('viseme_')))
+            morphMeshes.push(child);
+        });
+
+        model.rotation.set(Math.PI/2, 0, 0);
+        model.scale.set(2, 2, 2);
+        model.position.set(0, 0, 0.05);
+
+        anchorEl.object3D.add(model);
+
+        const clock=new THREE.Clock();
+        (function loop(){
+          requestAnimationFrame(loop);
+          if(mixer) mixer.update(clock.getDelta());
+        })();
+
+        setStatus('','Point camera at your marker');
+        playAnim(ANIM.IDLE);
+        console.log('✅ Avatar loaded and parented to anchor');
+      },
+      p=>{if(p.total)setStatus('','Avatar '+Math.round(p.loaded/p.total*100)+'%');},
+      err=>{console.error('GLB error:',err);setStatus('err','Avatar failed to load');}
+    );
+  }
+
+  function playAnim(name,loop=true){
+    if(!mixer)return;
+    const k=Object.keys(animations).find(k=>k.toLowerCase()===name.toLowerCase());
+    if(!k)return;
+    currentActions.forEach(a=>a.fadeOut(0.3)); currentActions=[];
+    const a=animations[k]; a.reset();
+    a.setLoop(loop?AFRAME.THREE.LoopRepeat:AFRAME.THREE.LoopOnce,Infinity);
+    a.clampWhenFinished=!loop; a.fadeIn(0.3).play(); currentActions.push(a);
+  }
+  function setViseme(name,intensity){
+    morphMeshes.forEach(m=>{
+      const d=m.morphTargetDictionary;
+      Object.keys(d).forEach(k=>{if(k.startsWith('viseme_'))m.morphTargetInfluences[d[k]]=0;});
+      if(name&&d[name]!==undefined)m.morphTargetInfluences[d[name]]=intensity;
+    });
+  }
+  function resetMouth(){setViseme(null,0);}
+  function animateMouth(){
+    if(!isPlayingLipSync||!currentAudio)return;
+    const t=currentAudio.currentTime;
+    const cue=currentMouthCues.find(c=>t>=c.start&&t<c.end);
+    setViseme(cue?(RHUBARB_TO_VISEME[cue.value]||cue.value):null,cue?0.85:0);
+    requestAnimationFrame(animateMouth);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ✅ WHISPER VOICE INPUT
+  // Hold-to-record on the microphone button.
+  // • Press (mousedown / touchstart) → start MediaRecorder
+  // • Release (mouseup / touchend)   → stop recording → send to Whisper → sendMessage
+  // • Auto-stops at CONFIG.MAX_REC_SECS seconds.
+  // Falls back to Web Speech API if MediaRecorder is unavailable.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  function startRecTimer(){
+    recSeconds=0; recTimer.textContent='0s'; recTimer.classList.add('visible');
+    recTimerInterval=setInterval(()=>{
+      recSeconds++;
+      recTimer.textContent=recSeconds+'s';
+      if(recSeconds>=CONFIG.MAX_REC_SECS) stopRecording();
+    },1000);
+  }
+  function stopRecTimer(){
+    clearInterval(recTimerInterval);
+    recTimerInterval=null;
+    recTimer.classList.remove('visible');
+  }
+
+  async function startRecording(){
+    if(isRecording) return;
+    try{
+      recStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    }catch(e){
+      setStatus('err','Mic denied: '+e.message);
+      return;
+    }
+
+    // Pick the best supported MIME type
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/ogg','audio/mp4']
+      .find(t=>MediaRecorder.isTypeSupported(t)) || '';
+
+    audioChunks=[];
+    mediaRecorder = new MediaRecorder(recStream, mimeType ? {mimeType} : {});
+    mediaRecorder.ondataavailable = e=>{if(e.data.size>0)audioChunks.push(e.data);};
+    mediaRecorder.onstop = async ()=>{
+      const blob = new Blob(audioChunks, {type: mimeType || 'audio/webm'});
+      audioChunks=[];
+      recStream.getTracks().forEach(t=>t.stop()); recStream=null;
+      await processVoiceBlob(blob);
+    };
+    mediaRecorder.start(100); // collect data every 100 ms
+    isRecording=true;
+    voiceBtn.classList.add('recording');
+    voiceHint.classList.add('visible');
+    startRecTimer();
+    setStatus('','🔴 Recording… release to send');
+  }
+
+  function stopRecording(){
+    if(!isRecording || !mediaRecorder) return;
+    isRecording=false;
+    stopRecTimer();
+    voiceBtn.classList.remove('recording');
+    voiceBtn.classList.add('processing');
+    voiceHint.classList.remove('visible');
+    setStatus('warn','Transcribing…');
+    try{ mediaRecorder.stop(); } catch(e){ console.warn('mediaRecorder.stop error:',e); }
+  }
+
+  async function processVoiceBlob(blob){
+    voiceBtn.classList.remove('processing');
+    if(blob.size < 3000){
+      setStatus('warn','Recording too short — try again');
+      return;
+    }
+    try{
+      setStatus('warn','Transcribing with Whisper…');
+      const result = await whisperTranscribe(blob, activeLangKey);
+      const tx = (result.text||'').trim();
+      if(!tx){ setStatus('warn','Could not understand — please try again'); return; }
+
+      // ── Language resolution (priority order) ─────────────────────────────
+      // 1. Convert Whisper's full-name language to ISO code using our map
+      const wLangRaw  = result.detected_language || '';
+      const wLangISO  = whisperLangToISO(wLangRaw);
+
+      // 2. Script-based detection on the transcribed text (fast, no network)
+      //    Returns null for Devanagari (can't distinguish hi vs mr from script alone)
+      const scriptLang = detectLangFromScript(tx);
+
+      // 3. Detect contradiction: Whisper says "gujarati" but text has NO Gujarati
+      //    Unicode characters → Whisper mis-fired. Trust script over Whisper in this case.
+      const SCRIPT_LANGS = ['bn','pa','gu','or','ta','te','kn','ml','ur'];
+      const whisperContradicted = wLangISO && SCRIPT_LANGS.includes(wLangISO) &&
+                                   scriptLang && scriptLang !== wLangISO;
+
+      let resolvedLang = null;
+
+      if (langLocked) {
+        // User manually selected a language — respect it always
+        resolvedLang = activeLangKey;
+      } else if (whisperContradicted) {
+        // Contradiction detected (e.g. Whisper says "gu" but text is Devanagari)
+        // → Run GPT as tiebreaker — it reads the actual words, not acoustics
+        console.warn(`⚠️ Whisper said "${wLangRaw}" but script suggests "${scriptLang}" — asking GPT`);
+        setStatus('warn','Resolving language…');
+        resolvedLang = await detectLangGPT(tx);
+        console.log(`GPT resolved → ${resolvedLang}`);
+      } else if (scriptLang) {
+        // Non-ambiguous script (Bengali, Gujarati, Tamil etc.) — trust it
+        resolvedLang = scriptLang;
+      } else if (wLangISO) {
+        // Devanagari or Latin text: trust Whisper's ISO (now properly converted)
+        resolvedLang = wLangISO;
+      }
+
+      // Apply detected language if different from current
+      if (resolvedLang && resolvedLang !== activeLangKey) {
+        setLang(resolvedLang, true);
+      }
+
+      userInput.value = tx;
+      setStatus('','Sending: "'+tx.slice(0,40)+(tx.length>40?'…':'')+'"');
+      await sendMessage(tx);
+    }catch(e){
+      console.error('Whisper processing error:',e);
+      setStatus('err','Transcription failed: '+e.message);
+    }
+  }
+
+  // ── Voice button event listeners (both mouse and touch) ───────────────────
+  function onVoiceDown(e){
+    e.preventDefault();
+    if(sendBtn.disabled) return; // busy processing
+    startRecording();
+  }
+  function onVoiceUp(e){
+    e.preventDefault();
+    if(isRecording) stopRecording();
+  }
+
+  voiceBtn.addEventListener('mousedown',  onVoiceDown);
+  voiceBtn.addEventListener('mouseup',    onVoiceUp);
+  voiceBtn.addEventListener('mouseleave', onVoiceUp);  // drag off button = stop
+  voiceBtn.addEventListener('touchstart', onVoiceDown, {passive:false});
+  voiceBtn.addEventListener('touchend',   onVoiceUp,   {passive:false});
+  voiceBtn.addEventListener('touchcancel',onVoiceUp,   {passive:false});
+
+  // ── AR events ────────────────────────────────────────────────────────────
+  sceneEl.addEventListener('arReady',()=>{
+    clearTimeout(arReadyTimer);
+    loadingOverlay.classList.remove('active');
+    setTimeout(()=>loadAvatar(),100);
+    setStatus('','Point camera at your marker');
+  });
+
+  sceneEl.addEventListener('arError',()=>{
+    clearTimeout(arReadyTimer);
+    loadingText.textContent='Camera error — tap Retry';
+    retryBtn.style.display='block';
+    setStatus('err','AR error');
+  });
+
+  targetEl.addEventListener('targetFound',()=>{
+    if(targetLostTimer){clearTimeout(targetLostTimer);targetLostTimer=null;}
+    loadingOverlay.classList.remove('active');
+    anchorEl.object3D.visible=true;
+    showChat();
+    setStatus('','Shankh is here! Ask anything');
+    playAnim(ANIM.IDLE);
+  });
+
+  targetEl.addEventListener('targetLost',()=>{
+    anchorEl.object3D.visible=false;
+    setStatus('','Point camera at your marker');
+    if(targetLostTimer) clearTimeout(targetLostTimer);
+    targetLostTimer=setTimeout(()=>{
+      hideChat(true);
+      targetLostTimer=null;
+    },2000);
+  });
+
+  // ── Start AR ─────────────────────────────────────────────────────────────
+  function _startAR(){
+    if(arStarted)return; arStarted=true;
+    startBtn.disabled=true; startBtn.textContent='Starting…';
+
+    try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){const c=new AC();const b=c.createBuffer(1,1,22050);const s=c.createBufferSource();s.buffer=b;s.connect(c.destination);s.start(0);}}catch(e){}
+    try{const d=new Audio();d.src='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';d.play().catch(()=>{});}catch(e){}
+
+    document.getElementById('instructions').style.display='none';
+
+    loadingOverlay.classList.add('active');
+    loadingText.textContent='Requesting camera…';
+    setStatus('','Requesting camera…');
+
+    arReadyTimer=setTimeout(()=>{
+      loadingText.textContent='Taking too long — tap Retry';
+      retryBtn.style.display='block';
+      setStatus('err','Check camera permission');
+    },30000);
+
+    const tryStart=()=>{
+      const sys=sceneEl.systems['mindar-image-system'];
+      if(sys){loadingText.textContent='Starting AR engine…';sys.start();}
+      else{loadingText.textContent='AR system not found';retryBtn.style.display='block';}
+    };
+    if(sceneEl.hasLoaded) tryStart(); else sceneEl.addEventListener('loaded',tryStart,{once:true});
+  }
+  window._startAR=_startAR;
+  if(_arPending){_arPending=false;_startAR();}
+
+  sendBtn.addEventListener('click',()=>sendMessage(userInput.value));
+  userInput.addEventListener('keypress',e=>{if(e.key==='Enter')sendMessage(userInput.value);});
+
+  setStatus('','Ready — tap Start AR');
+  setLang('en',false);
+});
+</script>
+</body>
+</html>
 /* ── Status bar ── */
 #status-bar {
   position: fixed;
