@@ -7,10 +7,14 @@ Shankh AR — All-in-One Server (port 5000)
   /retrieve            → RAG FAISS semantic search
   /stock/price         → yfinance live stock price
   /stock/insights      → analyst recommendations (Google Sheets)
+  /proxy/chat          → OpenAI GPT proxy  (avoids browser CORS block)
+  /proxy/detect_lang   → OpenAI language detection proxy
+  /transcribe          → OpenAI Whisper STT proxy  (avoids browser CORS + far better than Web Speech API)
   /health              → status of all subsystems
   /audio/<id>          → serve generated audio files
 
 Run:
+  export OPENAI_API_KEY="sk-proj-your-key-here"
   python combined_server.py
 
 Expose via ngrok:
@@ -21,6 +25,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_compress import Compress
 import os, subprocess, json, uuid, time, pickle, hashlib, threading
+import requests as req_lib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from openai import OpenAI
@@ -56,10 +61,10 @@ AUDIO_DIR.mkdir(exist_ok=True)
 RHUBARB_PATH    = "/Users/allenpeter/Desktop/Rhubarb/Rhubarb-Lip-Sync-1.14.0-macOS/rhubarb"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-OPENAI_API_KEY = os.environ.get(
-    "OPENAI_API_KEY",
-    "Your_OpenAi_API_Key"
-)
+# ✅ Read API key from environment variable ONLY — never hardcode in source
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+if not OPENAI_API_KEY:
+    print("⚠️  WARNING: OPENAI_API_KEY not set. Run: export OPENAI_API_KEY='sk-proj-...'")
 
 INSIGHTS_SHEET_ID  = "13926Tv0c8xGj2vGDW1xqwTG9FY1cvlfpRLacM0fPLa0"
 INSIGHTS_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{INSIGHTS_SHEET_ID}/gviz/tq?tqx=out:csv"
@@ -74,7 +79,7 @@ CORS(app,
      methods=["GET", "POST", "OPTIONS"])
 Compress(app)
 
-NO_CACHE_PREFIXES = ('/generate_lipsync', '/retrieve', '/stock', '/health', '/audio')
+NO_CACHE_PREFIXES = ('/generate_lipsync', '/retrieve', '/stock', '/health', '/audio', '/proxy', '/transcribe')
 STATIC_EXTS       = {'.js', '.wasm', '.glb', '.mind', '.jpg', '.png', '.html'}
 
 @app.after_request
@@ -95,7 +100,6 @@ rag_index       = None
 rag_metadata    = None
 rag_model       = None
 rag_embed_cache = {}
-# ★ FIX: increase max_workers so a slow embed doesn't block other requests
 rag_executor    = ThreadPoolExecutor(max_workers=4)
 
 def load_rag():
@@ -139,8 +143,6 @@ def load_rag():
         rag_index = None
         return
 
-    # ★ FIX: warm up the model NOW at startup so the first /retrieve call
-    #   doesn't hit the cold-start delay and timeout.
     def _warmup():
         try:
             print("🔥 Warming up embedding model...")
@@ -199,7 +201,7 @@ def check_dependencies():
         print(f"  ffmpeg   : ❌ — run: brew install ffmpeg")
         exit(1)
 
-    print(f"  OpenAI   : ✅ key set")
+    print(f"  OpenAI   : {'✅ key set' if OPENAI_API_KEY else '❌ NOT SET — export OPENAI_API_KEY=...'}")
 
     required = ["ar_new.html", "targets.mind", "avatar_hq.glb", "marker.jpg"]
     print("-"*55)
@@ -256,7 +258,133 @@ def health():
     })
 
 # =============================================================================
-# LIP-SYNC (English fallback — Bhashini handles all Indic from frontend)
+# OPENAI PROXY ROUTES
+# Browser → Flask → OpenAI  (fixes CORS block on direct browser calls)
+# =============================================================================
+@app.route('/proxy/chat', methods=['POST'])
+def proxy_chat():
+    """Proxy for GPT chat completions — avoids browser CORS restrictions."""
+    if not OPENAI_API_KEY:
+        return jsonify({'error': 'OPENAI_API_KEY not set on server'}), 500
+
+    data = request.json or {}
+    try:
+        r = req_lib.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={
+                'Content-Type':  'application/json',
+                'Authorization': f'Bearer {OPENAI_API_KEY}',
+            },
+            json=data,
+            timeout=30
+        )
+        return jsonify(r.json()), r.status_code
+    except Exception as e:
+        print(f"proxy/chat error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/proxy/detect_lang', methods=['POST'])
+def proxy_detect_lang():
+    """Proxy for language detection via GPT — avoids browser CORS restrictions."""
+    if not OPENAI_API_KEY:
+        return jsonify({'error': 'OPENAI_API_KEY not set on server'}), 500
+
+    text = (request.json or {}).get('text', '')
+    if not text:
+        return jsonify({'error': 'No text provided'}), 400
+
+    try:
+        r = req_lib.post(
+            'https://api.openai.com/v1/chat/completions',
+            headers={
+                'Content-Type':  'application/json',
+                'Authorization': f'Bearer {OPENAI_API_KEY}',
+            },
+            json={
+                'model':       'gpt-4o-mini',
+                'max_tokens':  5,
+                'temperature': 0,
+                'messages': [
+                    {
+                        'role':    'system',
+                        'content': 'Detect language. Reply ONLY with the ISO 639-1 code: hi,ta,te,kn,ml,bn,mr,gu,pa,or,ur,as,en,mni,sat. Nothing else.'
+                    },
+                    {'role': 'user', 'content': text}
+                ]
+            },
+            timeout=10
+        )
+        return jsonify(r.json()), r.status_code
+    except Exception as e:
+        print(f"proxy/detect_lang error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# ✅ NEW: WHISPER TRANSCRIPTION PROXY
+# Replaces browser Web Speech API — far more accurate for Indian languages/accents.
+# Accepts: multipart/form-data with 'audio' file + optional 'lang' field.
+# Returns: { text: "...", detected_language: "..." }
+# =============================================================================
+@app.route('/transcribe', methods=['POST'])
+def transcribe():
+    """
+    Transcribe audio using OpenAI Whisper.
+    Accepts multipart form with:
+      - audio: audio blob (webm/ogg/wav/mp4 — whatever MediaRecorder produces)
+      - lang:  optional ISO 639-1 hint (e.g. 'hi', 'ta') — omit for auto-detect
+    Returns: { text, detected_language }
+    """
+    if not OPENAI_API_KEY:
+        return jsonify({'error': 'OPENAI_API_KEY not set on server'}), 500
+
+    audio_file = request.files.get('audio')
+    if not audio_file:
+        return jsonify({'error': 'No audio file provided'}), 400
+
+    lang_hint = request.form.get('lang', '').strip() or None
+
+    # Save incoming blob to a temp file with an appropriate extension
+    orig_name  = audio_file.filename or 'audio.webm'
+    ext        = Path(orig_name).suffix or '.webm'
+    tmp_path   = AUDIO_DIR / f"whisper_{uuid.uuid4().hex[:8]}{ext}"
+
+    try:
+        audio_file.save(str(tmp_path))
+        file_size = tmp_path.stat().st_size
+        if file_size < 1000:
+            return jsonify({'error': 'Audio too short or empty', 'bytes': file_size}), 400
+
+        client = OpenAI(api_key=OPENAI_API_KEY)
+
+        with open(tmp_path, 'rb') as f:
+            kwargs = {
+                'model': 'whisper-1',
+                'file' : f,
+                'response_format': 'verbose_json',   # gives us detected_language too
+            }
+            # Only pass language hint for non-English to help Whisper
+            if lang_hint and lang_hint != 'en':
+                kwargs['language'] = lang_hint
+
+            result = client.audio.transcriptions.create(**kwargs)
+
+        text      = (result.text or '').strip()
+        detected  = getattr(result, 'language', lang_hint or 'en')
+
+        print(f"Whisper: lang={detected}, text='{text[:60]}'")
+        return jsonify({'text': text, 'detected_language': detected})
+
+    except Exception as e:
+        print(f"Whisper error: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+# =============================================================================
+# LIP-SYNC
 # =============================================================================
 _lipsync_cache = {}
 MAX_CACHE_SIZE = 50
@@ -330,11 +458,6 @@ def generate_lipsync():
 
 # =============================================================================
 # RAG RETRIEVE
-# ★ FIXES:
-#   1. future.result(timeout=30)  — was 5, caused TimeoutError crash
-#   2. TimeoutError caught explicitly — returns 200 with empty results
-#      so the frontend continues (no 500, no server crash)
-#   3. All exceptions return 200 with empty results (non-fatal to client)
 # =============================================================================
 @app.route('/retrieve', methods=['POST'])
 def retrieve():
@@ -356,10 +479,8 @@ def retrieve():
         else:
             future = rag_executor.submit(rag_model.encode, [query])
             try:
-                # ★ FIX 1: 30 s timeout (was 5 s — too short for cold-start)
                 embedding = future.result(timeout=30)
             except TimeoutError:
-                # ★ FIX 2: return empty results gracefully, do NOT raise
                 print(f"⚠️  RAG: embedding timed out for query '{query[:40]}' — returning empty")
                 return jsonify({'results': [], 'num_results': 0, 'timeout': True}), 200
 
@@ -391,7 +512,6 @@ def retrieve():
         import traceback
         print(f"RAG error: {e}")
         traceback.print_exc()
-        # ★ FIX 3: never crash — return empty results so the chat still works
         return jsonify({'results': [], 'num_results': 0, 'error': str(e)}), 200
 
 # =============================================================================
